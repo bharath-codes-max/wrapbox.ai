@@ -96,13 +96,37 @@ type DeployState = "idle" | "onboarded" | "pushed";
 
 const ORG = { name: "Northwind Financial", sso: "Okta · SAML", region: "us-east-1", mdm: "Jamf Pro" };
 
-/** The four devices in the MDM scope. Simulated fleet; deterministic key ids. */
-const FLEET: { host: string; os: string; logo: "apple" | "ubuntu" }[] = [
-  { host: "nwf-mbp-0417", os: "macOS 15.3", logo: "apple" },
-  { host: "nwf-mbp-0422", os: "macOS 15.3", logo: "apple" },
-  { host: "nwf-lnx-ci-02", os: "Ubuntu 24.04", logo: "ubuntu" },
-  { host: "nwf-mbp-0431", os: "macOS 14.7", logo: "apple" },
+/** The four devices in the MDM scope. Simulated fleet; deterministic key ids.
+ *  A device is never anonymous: enforcement happens on one machine, belonging to
+ *  one person, and the receipt has to be able to name both. */
+interface Device {
+  host: string;
+  os: string;
+  logo: "apple" | "ubuntu";
+  owner: string;
+  role: string;
+}
+const FLEET: Device[] = [
+  { host: "nwf-mbp-0417", os: "macOS 15.3", logo: "apple", owner: "Priya Nair", role: "Senior engineer · Payments" },
+  { host: "nwf-mbp-0422", os: "macOS 15.3", logo: "apple", owner: "Daniel Okonkwo", role: "Engineer · Platform" },
+  { host: "nwf-lnx-ci-02", os: "Ubuntu 24.04", logo: "ubuntu", owner: "svc-build", role: "Service account · CI runner" },
+  { host: "nwf-mbp-0431", os: "macOS 14.7", logo: "apple", owner: "Sofia Ramirez", role: "Analyst · Customer ops" },
 ];
+const DEVICE_BY_HOST = new Map(FLEET.map((d) => [d.host, d]));
+
+/** Which machine each runtime surface lives on. Fixed, not random: the same
+ *  surface is always the same person's laptop, the way a real fleet behaves.
+ *  Gateway surfaces map to nothing — there is no device in front of them. */
+const HOST_OF_SURFACE: Record<string, string> = {
+  chrome: "nwf-mbp-0417",
+  cursor: "nwf-mbp-0417",
+  vscode: "nwf-mbp-0422",
+  "claude-cli": "nwf-mbp-0422",
+  "unknown-agent": "nwf-lnx-ci-02",
+  "claude-desktop": "nwf-mbp-0431",
+};
+const deviceFor = (surface: Surface | null): Device | null =>
+  surface && surface.plane === "runtime" ? DEVICE_BY_HOST.get(HOST_OF_SURFACE[surface.id]) ?? null : null;
 
 /** FNV-1a. Every id on this page is derived, never random. */
 function hash32(seed: string): number {
@@ -430,7 +454,7 @@ function Packet({ runKey, label, reduced }: { runKey: string; label: string; red
   );
 }
 
-function FleetList({ deploy, enrolled, reduced }: { deploy: DeployState; enrolled: number; reduced: boolean }) {
+function FleetList({ deploy, enrolled, activeHost, reduced }: { deploy: DeployState; enrolled: number; activeHost?: string; reduced: boolean }) {
   if (deploy !== "pushed") return <div className="mt-2.5 border-t border-line pt-2 text-[12.5px] text-fg-2">0 devices · push wrapboxd from Deploy, on the left</div>;
   return (
     <div className="mt-2.5 border-t border-line">
@@ -443,17 +467,18 @@ function FleetList({ deploy, enrolled, reduced }: { deploy: DeployState; enrolle
       <ul>
         {FLEET.map((d, i) => {
           const ok = i < enrolled;
+          const here = d.host === activeHost;
           return (
             <motion.li
               key={d.host}
               initial={{ opacity: 0, x: -6 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: reduced ? 0.01 : 0.28, ease: EASE, delay: reduced ? 0 : 0.5 + i * 0.38 }}
-              className="py-1.5 border-t border-line"
+              className={cn("border-t border-line py-1.5", here && "-mx-2 rounded-lg bg-accent-soft px-2 ring-1 ring-accent/25")}
             >
               <div className="flex items-center gap-2">
                 <Logo name={d.logo} size={18} rounded="rounded-[5px]" />
-                <span className="font-mono text-[12.5px] text-fg truncate">{d.host}</span>
+                <span className={cn("truncate font-mono text-[12.5px]", here ? "font-semibold text-accent" : "text-fg")}>{d.host}</span>
                 <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-[11px]">
                   {ok ? (
                     <>
@@ -467,6 +492,10 @@ function FleetList({ deploy, enrolled, reduced }: { deploy: DeployState; enrolle
                     </>
                   )}
                 </span>
+              </div>
+              <div className="pl-[26px] text-[11.5px] text-fg-2">
+                <span className="truncate">{d.owner}</span>
+                <span className="text-fg-3"> · {d.role}</span>
               </div>
               <div className="mt-0.5 flex items-center gap-1.5 pl-[26px] text-[11.5px] text-fg-2">
                 <span className="truncate">{d.os}</span>
@@ -482,7 +511,7 @@ function FleetList({ deploy, enrolled, reduced }: { deploy: DeployState; enrolle
   );
 }
 
-function FabricMap({ run, runKey, effect, deploy, receiptCount, reduced }: { run: RunResult | null; runKey: string; effect: string; deploy: DeployState; receiptCount: number; reduced: boolean }) {
+function FabricMap({ run, runKey, effect, deploy, device, receiptCount, reduced }: { run: RunResult | null; runKey: string; effect: string; deploy: DeployState; device: Device | null; receiptCount: number; reduced: boolean }) {
   const plane = run?.plane;
   const pushed = deploy === "pushed";
 
@@ -541,7 +570,7 @@ function FabricMap({ run, runKey, effect, deploy, receiptCount, reduced }: { run
             right={pushed && allIn ? <Chip tone="allow" className="whitespace-nowrap">Fleet · {FLEET.length}</Chip> : undefined}
             reduced={reduced}
           >
-            <FleetList deploy={deploy} enrolled={enrolled} reduced={reduced} />
+            <FleetList deploy={deploy} enrolled={enrolled} activeHost={plane === "runtime" ? device?.host : undefined} reduced={reduced} />
           </Node>
           {pushed && !allIn && <Packet runKey="mdm-push" label="wrapboxd · policy v1" reduced={reduced} />}
           {run && plane === "runtime" && <Packet runKey={runKey} label={effect} reduced={reduced} />}
@@ -640,6 +669,7 @@ function FabricColumn({
   const decisionRef = useRef<HTMLDivElement>(null);
   const settle = () => decisionRef.current?.scrollIntoView({ block: "nearest", behavior: reduced ? "auto" : "smooth" });
   const live = run && action && surface;
+  const device = deviceFor(surface);
 
   const rows = live
     ? [
@@ -652,14 +682,33 @@ function FabricColumn({
             </>
           ),
         },
+        {
+          label: "Device",
+          value: device ? (
+            // Enforcement happened on ONE machine, belonging to one person. The
+            // receipt names both, so an investigator knows where to go.
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <Logo name={device.logo} size={16} rounded="rounded-[4px]" />
+              <span className="font-medium">{device.owner}</span>
+              <span className="text-fg-3">· {device.role}</span>
+              <span className="basis-full font-mono text-[12px] text-fg-2">
+                {device.host} · {device.os} · {keyIdFor(device.host)}
+              </span>
+              {deploy !== "pushed" && <span className="basis-full text-[12px] text-fg-3">fleet not pushed yet — enrolled ad hoc for this run</span>}
+            </span>
+          ) : (
+            <span className="text-fg-2">
+              No enrolled device — the agent reached the company system through the Gateway, so there is no laptop in front of it to enforce on.
+            </span>
+          ),
+        },
         { label: "Intent", value: <span className="text-fg-2">{action.intent}</span> },
         {
           label: "Enforced at",
           value: (
             <span className="flex flex-wrap items-center gap-x-1.5">
               <PlaneTag plane={run.plane} />
-              <span className="text-fg-3">— {run.plane === "runtime" ? "on the device" : "in front of the company system"}</span>
-              {run.plane === "runtime" && deploy !== "pushed" && <span className="basis-full text-[12px] text-fg-3">fleet not pushed yet — enrolled ad hoc for this run</span>}
+              <span className="text-fg-3">— {run.plane === "runtime" ? `on ${device?.host ?? "the device"}` : "in front of the company system"}</span>
             </span>
           ),
         },
@@ -690,7 +739,7 @@ function FabricColumn({
     <Card className="shrink-0 shadow-card">
       <CardHead title="The Wrapbox fabric" sub="Where the request goes, which rule matched, and what the engine decided at the moment you clicked." />
       <div className="border-t border-line">
-        <FabricMap run={run} runKey={runKey} effect={action?.act.effect ?? ""} deploy={deploy} receiptCount={receipts.length} reduced={reduced} />
+        <FabricMap run={run} runKey={runKey} effect={action?.act.effect ?? ""} deploy={deploy} device={device} receiptCount={receipts.length} reduced={reduced} />
       </div>
 
       {!live ? (
@@ -710,6 +759,7 @@ function FabricColumn({
                   verdict={run.verdict}
                   act={action.act}
                   agent={run.agent}
+                  onBehalfOf={device ? `${device.owner} · ${device.host}` : "no enrolled device · gateway"}
                   ruleId={run.verdict.rule}
                   decisionId={run.receiptId}
                   reduced={reduced}
@@ -779,6 +829,7 @@ function ReviewGate({
   verdict,
   act,
   agent,
+  onBehalfOf,
   ruleId,
   decisionId,
   reduced,
@@ -787,6 +838,7 @@ function ReviewGate({
   verdict: Verdict;
   act: Act;
   agent: string;
+  onBehalfOf: string;
   ruleId: string;
   decisionId: string;
   reduced: boolean;
@@ -821,7 +873,7 @@ function ReviewGate({
       const minted = await mintPermit({
         decision_id: decisionId,
         subject_agent: agent,
-        on_behalf_of: signed[0]?.name ?? "the requester",
+        on_behalf_of: onBehalfOf,
         action: act.effect,
         resource: statementOf(act).slice(0, 48),
         environment: String(act.env ?? "production"),
@@ -834,7 +886,7 @@ function ReviewGate({
     return () => {
       live = false;
     };
-  }, [met, permit, denied, decisionId, agent, act, signed]);
+  }, [met, permit, denied, decisionId, agent, onBehalfOf, act, signed]);
 
   // The executor's own check, before it performs the effect. Consumes the nonce.
   const runIt = async () => {
@@ -1145,6 +1197,7 @@ function SurfaceRow({
   reduced: boolean;
 }) {
   const Icon = iconFor(surface.icon);
+  const device = deviceFor(surface);
   // The mini interface shows the action that is actually selected on THIS surface.
   const shown = surface.actions.find((x) => x.id === selectedActionId) ?? null;
   return (
@@ -1167,6 +1220,16 @@ function SurfaceRow({
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: reduced ? 0.01 : 0.28, ease: EASE }} className="overflow-hidden">
             <div className="space-y-3 px-5 pb-4">
+              {device && (
+                <div className="flex items-center gap-2 rounded-lg border border-line bg-surface-2 px-2.5 py-2">
+                  <Logo name={device.logo} size={18} rounded="rounded-[5px]" />
+                  <span className="min-w-0 flex-1 truncate text-[11.5px]">
+                    <span className="font-medium">{device.owner}</span>
+                    <span className="text-fg-3"> · {device.host}</span>
+                  </span>
+                  <span className="shrink-0 font-mono text-[11px] text-fg-3">{device.os}</span>
+                </div>
+              )}
               <MiniChrome surface={surface} action={shown} agent={agent} />
               <div>
                 <div className="eyebrow mb-2">Actions</div>
