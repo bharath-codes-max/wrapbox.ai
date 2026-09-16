@@ -91,6 +91,76 @@ const D_CHIP_TONE: Record<Decision, "block" | "review" | "constrain" | "allow"> 
 const SPRING = { type: "spring", duration: 0.35, bounce: 0.15 } as const;
 const EASE = [0.22, 0.61, 0.36, 1] as const;
 
+/* ============================ the collapsible panel ============================ */
+// Every card on this page is a Panel: one click on its header folds it away, so
+// a demo can hide what it is not talking about. Purely presentational — nothing
+// here touches state the engine reads, and a folded panel keeps its children
+// mounted state on reopen.
+function Panel({
+  title,
+  sub,
+  right,
+  defaultOpen = true,
+  reduced,
+  className,
+  bodyClassName,
+  accent,
+  children,
+}: {
+  title: ReactNode;
+  sub?: ReactNode;
+  right?: ReactNode;
+  defaultOpen?: boolean;
+  reduced: boolean;
+  className?: string;
+  bodyClassName?: string;
+  /** A 2px top edge in this color — used by the Decision panel for its verdict. */
+  accent?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Card className={cn("shrink-0 overflow-hidden shadow-card", className)}>
+      {accent && <span aria-hidden className="block h-[2px]" style={{ background: accent }} />}
+      <div className={cn("flex items-start gap-3 pl-3.5 pr-5 transition-[padding]", open ? "pt-4 pb-3.5" : "py-3.5")}>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="group flex min-w-0 flex-1 items-start gap-2.5 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <span className="mt-px grid size-6 shrink-0 place-items-center rounded-md text-fg-3 transition-colors group-hover:bg-surface-2 group-hover:text-fg-2">
+            <ChevronDown className={cn("size-3.5 transition-transform duration-200", !open && "-rotate-90")} />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[14px] font-semibold leading-tight text-fg">{title}</span>
+            {/* A folded panel is one clean line: the description belongs to the open state. */}
+            {sub && open && <span className="mt-1 block text-[12.5px] leading-relaxed text-fg-3">{sub}</span>}
+          </span>
+        </button>
+        {right && <div className="mt-px shrink-0">{right}</div>}
+      </div>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={reduced ? { duration: 0.01 } : { duration: 0.3, ease: EASE }}
+            className="overflow-hidden"
+          >
+            <div className={cn("border-t border-line", bodyClassName)}>{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </Card>
+  );
+}
+
+/** The quiet label that sits above each column. */
+const ColumnLabel = ({ children }: { children: ReactNode }) => <div className="eyebrow px-1 pb-0.5">{children}</div>;
+
 /* ============================ deploy (new, click-driven) ============================ */
 type DeployState = "idle" | "onboarded" | "pushed";
 
@@ -248,11 +318,23 @@ function DeployCard({ deploy, onOnboard, onPush, reduced }: { deploy: DeployStat
   const onboarded = deploy !== "idle";
   const pushed = deploy === "pushed";
   return (
-    <Card className="shrink-0 overflow-hidden shadow-card">
-      <CardHead title="Deploy" sub="Create the workspace, then push wrapboxd to the fleet." />
-      <div className="border-t border-line">
+    <Panel
+      title="Deploy"
+      sub="Create the workspace, then push wrapboxd to the fleet."
+      reduced={reduced}
+      right={
+        pushed ? (
+          <Chip tone="allow"><Check className="size-3" /> {FLEET.length} enrolled</Chip>
+        ) : onboarded ? (
+          <Chip tone="accent">1 of 2 done</Chip>
+        ) : (
+          <Chip tone="muted">not started</Chip>
+        )
+      }
+    >
+      <div>
         {/* Step 1 */}
-        <div className="px-6 py-4 border-b border-line">
+        <div className="px-5 py-4 border-b border-line">
           <div className="flex items-center justify-between gap-3">
             <div className="eyebrow">Step 1 · Create workspace</div>
             <span className="inline-flex items-center gap-1.5 text-[11.5px] text-fg-3">
@@ -279,7 +361,7 @@ function DeployCard({ deploy, onOnboard, onPush, reduced }: { deploy: DeployStat
           </div>
         </div>
         {/* Step 2 */}
-        <div className="px-6 py-4">
+        <div className="px-5 py-4">
           <div className="flex items-center justify-between gap-3">
             <div className="eyebrow">Step 2 · Push wrapboxd to the fleet</div>
             <span className="inline-flex items-center gap-1.5 text-[11.5px] text-fg-3">
@@ -313,7 +395,7 @@ function DeployCard({ deploy, onOnboard, onPush, reduced }: { deploy: DeployStat
           </div>
         </div>
       </div>
-    </Card>
+    </Panel>
   );
 }
 
@@ -324,10 +406,14 @@ function IntentContract({ enabled, onToggle, onReset, reduced }: { enabled: stri
   const grouped = DECISION_ORDER.map((d) => ({ d, rules: active.filter((r) => ruleDecision(r) === d) })).filter((g) => g.rules.length);
 
   return (
-    <Card className="shrink-0 shadow-card">
-      <CardHead title="Intent contract" sub="What the admin wrote" right={<Button variant="ghost" size="sm" onClick={onReset}><RotateCcw className="size-3.5" /> Reset</Button>} />
-      <div className="border-t border-line">
-        <div className="px-6 py-4 border-b border-line">
+    <Panel
+      title="Intent contract"
+      sub="What the admin wrote"
+      reduced={reduced}
+      right={<Button variant="ghost" size="sm" onClick={onReset}><RotateCcw className="size-3.5" /> Reset</Button>}
+    >
+      <div>
+        <div className="px-5 py-4 border-b border-line">
           <blockquote className="border-l-2 border-accent pl-3">
             {INTENT_CONTRACT.map((line, i) => (
               <p key={i} className={cn("text-[13.5px] leading-relaxed", i && "mt-1")}>{line}</p>
@@ -336,7 +422,7 @@ function IntentContract({ enabled, onToggle, onReset, reduced }: { enabled: stri
         </div>
 
         {/* compiled */}
-        <div className="px-6 py-4 border-b border-line">
+        <div className="px-5 py-4 border-b border-line">
           <div className="eyebrow">Compiled into {active.length} rules</div>
           <div className="mt-3 space-y-3">
             {grouped.map((g) => (
@@ -360,7 +446,7 @@ function IntentContract({ enabled, onToggle, onReset, reduced }: { enabled: stri
         </div>
 
         {/* toggles — these really add and remove rules */}
-        <div className="px-6 pt-4 pb-2">
+        <div className="px-5 pt-4 pb-2">
           <div className="eyebrow">Policy switches</div>
           <p className="mt-1 text-[12.5px] leading-relaxed text-fg-3">Each switch adds or removes real rules from the set the engine evaluates. Turning one off re-runs the selected action, and the decision changes.</p>
         </div>
@@ -368,7 +454,7 @@ function IntentContract({ enabled, onToggle, onReset, reduced }: { enabled: stri
           {POLICY_TOGGLES.map((t, i) => {
             const on = enabled.includes(t.id);
             return (
-              <div key={t.id} className={cn("flex items-center gap-4 px-6 py-3.5", i < POLICY_TOGGLES.length - 1 && "border-b border-line")}>
+              <div key={t.id} className={cn("flex items-center gap-4 px-5 py-3.5", i < POLICY_TOGGLES.length - 1 && "border-b border-line")}>
                 <div className="min-w-0 flex-1">
                   <div className={cn("text-[13.5px] font-semibold", !on && "text-fg-2")}>{t.label}</div>
                   <div className="mt-0.5 font-mono text-[11.5px] text-fg-3 truncate">{t.ruleIds.join(" · ")}</div>
@@ -379,7 +465,7 @@ function IntentContract({ enabled, onToggle, onReset, reduced }: { enabled: stri
           })}
         </div>
       </div>
-    </Card>
+    </Panel>
   );
 }
 
@@ -393,15 +479,17 @@ function Node({ icon, title, copy, lit, tone = "accent", ruleId, right, reduced,
       className="relative overflow-hidden rounded-xl border border-line bg-surface-2 px-3.5 py-3"
     >
       {lit && <motion.span layout initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ duration: reduced ? 0.01 : 0.3, ease: EASE, delay: reduced ? 0 : 0.4 }} style={{ background: ring }} className="absolute inset-x-0 top-0 h-[2px] origin-left" aria-hidden />}
-      <div className="flex items-center gap-2">
+      {/* Wraps: in a narrow column the rule chip drops to its own line rather than
+          being clipped by the node's edge. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
         <span className="grid size-6 shrink-0 place-items-center rounded-md bg-surface text-fg-2 border border-line">{icon}</span>
         <span className="text-[13px] font-semibold">{title}</span>
-        <span className="ml-auto flex items-center gap-1.5">
+        <span className="ml-auto flex min-w-0 max-w-full items-center gap-1.5">
           {right}
           <AnimatePresence initial={false}>
             {lit && ruleId && (
               <motion.span key={ruleId} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={reduced ? { duration: 0.01 } : { ...SPRING, delay: 0.45 }}>
-                <Chip tone="accent" className="whitespace-nowrap"><span className="font-mono">{ruleId}</span></Chip>
+                <Chip tone="accent" className="max-w-full"><span className="truncate font-mono">{ruleId}</span></Chip>
               </motion.span>
             )}
           </AnimatePresence>
@@ -548,7 +636,7 @@ function FabricMap({ run, runKey, effect, deploy, device, receiptCount, reduced 
   };
 
   return (
-    <div className="px-6 py-5" onMouseMove={onMove} onMouseLeave={onLeave}>
+    <div className="px-5 py-5" onMouseMove={onMove} onMouseLeave={onLeave}>
       <div className="parallax-mouse" style={{ "--depth": 3 } as CSSProperties}>
         <Node
           icon={<Cpu className="size-3.5" />}
@@ -611,10 +699,8 @@ interface Receipt {
 }
 
 function EvidenceList({ receipts, reduced }: { receipts: Receipt[]; reduced: boolean }) {
-  if (!receipts.length) return null;
   return (
-    <div className="border-t border-line">
-      <div className="eyebrow px-6 pt-4 pb-2">Evidence · last {Math.min(receipts.length, 5)}</div>
+    <div>
       <AnimatePresence initial={false}>
         {receipts.slice(0, 5).map((r) => (
           <motion.div
@@ -624,7 +710,7 @@ function EvidenceList({ receipts, reduced }: { receipts: Receipt[]; reduced: boo
             animate={{ opacity: 1, y: 0, backgroundColor: "rgba(0,0,0,0)" }}
             exit={{ opacity: 0 }}
             transition={{ duration: reduced ? 0.01 : 0.5 }}
-            className="flex items-center gap-3 px-6 py-2.5 border-b border-line last:border-0"
+            className="flex items-center gap-3 border-b border-line px-5 py-2.5 last:border-0"
           >
             <DecisionPill d={r.decision} size="sm" />
             <span className="min-w-0 flex-1 truncate text-[12.5px]">
@@ -736,47 +822,67 @@ function FabricColumn({
     : [];
 
   return (
-    <Card className="shrink-0 shadow-card">
-      <CardHead title="The Wrapbox fabric" sub="Where the request goes, which rule matched, and what the engine decided at the moment you clicked." />
-      <div className="border-t border-line">
+    <>
+      <Panel
+        title="The Wrapbox fabric"
+        sub="Where the request goes, and which point enforced it."
+        reduced={reduced}
+        right={deploy === "pushed" ? <Chip tone="allow">fleet live</Chip> : <Chip tone="muted">not deployed</Chip>}
+      >
         <FabricMap run={run} runKey={runKey} effect={action?.act.effect ?? ""} deploy={deploy} device={device} receiptCount={receipts.length} reduced={reduced} />
-      </div>
+      </Panel>
 
       {!live ? (
-        <div className="border-t border-line px-6 py-10 text-center text-[13px] text-fg-3">Pick a surface on the right, then run one of its actions.</div>
+        <Card className="shrink-0 shadow-card">
+          <div className="px-5 py-12 text-center">
+            <div className="text-[13.5px] font-medium text-fg-2">No decision yet</div>
+            <p className="mx-auto mt-1.5 max-w-[42ch] text-[12.5px] leading-relaxed text-fg-3">Pick a surface on the right, then run one of its actions. Nothing plays on its own.</p>
+          </div>
+        </Card>
       ) : (
-        <div className="border-t border-line px-6 py-5">
-          <motion.div ref={decisionRef} key={runKey} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduced ? 0.01 : 0.35, ease: EASE, delay: reveal }} onAnimationComplete={settle}>
-            <Card className="relative overflow-hidden shadow-card">
-              <span aria-hidden className="absolute inset-x-0 top-0 h-[2px]" style={{ background: D_VAR[run.verdict.decision] }} />
-              <CardHead title="Decision" sub={`${run.agent} · ${action.label}`} right={<DecisionPill d={run.verdict.decision} />} />
-              <div className="border-t border-line px-6 py-5">
-                <EvidenceChain rows={rows} />
-              </div>
-              {run.verdict.decision === "REVIEW" && (
-                <ReviewGate
-                  key={runKey}
-                  verdict={run.verdict}
-                  act={action.act}
-                  agent={run.agent}
-                  onBehalfOf={device ? `${device.owner} · ${device.host}` : "no enrolled device · gateway"}
-                  ruleId={run.verdict.rule}
-                  decisionId={run.receiptId}
-                  reduced={reduced}
-                  onOutcome={onGateOutcome}
-                />
-              )}
-              <div className="flex flex-wrap items-center gap-2 border-t border-line px-6 py-3.5">
-                <Button variant="secondary" size="sm" onClick={() => setWhy(true)}><HelpCircle className="size-3.5" /> Why?</Button>
-                <Button variant="secondary" size="sm" onClick={onAnotherAgent}><Repeat className="size-3.5" /> Try another agent</Button>
-                <span className="text-[12px] text-fg-3">The rule keys on the action and its context, not the agent's name.</span>
-              </div>
-            </Card>
-          </motion.div>
-        </div>
+        <motion.div ref={decisionRef} key={runKey} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduced ? 0.01 : 0.35, ease: EASE, delay: reveal }} onAnimationComplete={settle} className="shrink-0">
+          <Panel
+            title="Decision"
+            sub={`${run.agent} · ${action.label}`}
+            accent={D_VAR[run.verdict.decision]}
+            reduced={reduced}
+            right={<DecisionPill d={run.verdict.decision} />}
+          >
+            <div className="px-5 py-5">
+              <EvidenceChain rows={rows} />
+            </div>
+            {run.verdict.decision === "REVIEW" && (
+              <ReviewGate
+                key={runKey}
+                verdict={run.verdict}
+                act={action.act}
+                agent={run.agent}
+                onBehalfOf={device ? `${device.owner} · ${device.host}` : "no enrolled device · gateway"}
+                ruleId={run.verdict.rule}
+                decisionId={run.receiptId}
+                reduced={reduced}
+                onOutcome={onGateOutcome}
+              />
+            )}
+            <div className="flex flex-wrap items-center gap-2 border-t border-line px-5 py-3.5">
+              <Button variant="secondary" size="sm" onClick={() => setWhy(true)}><HelpCircle className="size-3.5" /> Why?</Button>
+              <Button variant="secondary" size="sm" onClick={onAnotherAgent}><Repeat className="size-3.5" /> Try another agent</Button>
+              <span className="text-[12px] text-fg-3">The rule keys on the action and its context, not the agent&rsquo;s name.</span>
+            </div>
+          </Panel>
+        </motion.div>
       )}
 
-      <EvidenceList receipts={receipts} reduced={reduced} />
+      {receipts.length > 0 && (
+        <Panel
+          title="Evidence"
+          sub="One signed receipt per decision event."
+          reduced={reduced}
+          right={<Chip tone="muted" className="tnum">{receipts.length}</Chip>}
+        >
+          <EvidenceList receipts={receipts} reduced={reduced} />
+        </Panel>
+      )}
 
       <Drawer open={why && !!live} onClose={() => setWhy(false)} width={480} title="Why this decision">
         {live && (
@@ -814,7 +920,7 @@ function FabricColumn({
           </div>
         )}
       </Drawer>
-    </Card>
+    </>
   );
 }
 
@@ -916,7 +1022,7 @@ function ReviewGate({
 
   return (
     <div className="border-t border-line">
-      <div className="flex items-center justify-between gap-3 px-6 pt-4 pb-3">
+      <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
         <div className="eyebrow flex items-center gap-1.5">
           <ShieldCheck className="size-3.5 text-review" /> Held for approval
         </div>
@@ -925,7 +1031,7 @@ function ReviewGate({
         </span>
       </div>
 
-      <div className="px-6 pb-3">
+      <div className="px-5 pb-3">
         <p className="text-[12.5px] leading-relaxed text-fg-2">
           {verdict.approvers} — {quorum === 1 ? "one approval" : `${quorum} approvals`} required. Each approval is signed with that person&rsquo;s own key over the exact statement below; the
           permit that follows is bound to it and may be used once.
@@ -938,7 +1044,7 @@ function ReviewGate({
         {roster.map((p, i) => {
           const mine = signed.find((x) => x.id === p.id);
           return (
-            <div key={p.id} className={cn("flex items-center gap-3 px-6 py-3", i < roster.length - 1 && "border-b border-line")}>
+            <div key={p.id} className={cn("flex items-center gap-3 px-5 py-3", i < roster.length - 1 && "border-b border-line")}>
               <span className={cn("grid size-7 shrink-0 place-items-center rounded-full text-[11px] font-semibold", mine ? "bg-allow-soft text-allow" : "bg-surface-2 text-fg-2 border border-line")}>
                 {mine ? <Check className="size-3.5" /> : p.name.split(" ").map((w) => w[0]).join("")}
               </span>
@@ -962,7 +1068,7 @@ function ReviewGate({
 
       {/* deny, while it is still open */}
       {!permit && !denied && (
-        <div className="flex items-center gap-2 border-t border-line px-6 py-3">
+        <div className="flex items-center gap-2 border-t border-line px-5 py-3">
           <Button size="sm" variant="danger" onClick={() => deny(roster[0])} disabled={busy}>
             <ShieldAlert className="size-3.5" /> Deny
           </Button>
@@ -972,7 +1078,7 @@ function ReviewGate({
 
       <AnimatePresence initial={false}>
         {denied && (
-          <motion.div key="denied" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={fade} className="border-t border-line px-6 py-4">
+          <motion.div key="denied" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={fade} className="border-t border-line px-5 py-4">
             <div className="flex flex-wrap items-center gap-2">
               <DecisionPill d="BLOCK" />
               <span className="text-[13px] font-semibold">Denied by {denied.name}</span>
@@ -982,7 +1088,7 @@ function ReviewGate({
         )}
 
         {permit && (
-          <motion.div key="permit" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={fade} className="border-t border-line px-6 py-4 space-y-3">
+          <motion.div key="permit" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={fade} className="border-t border-line px-5 py-4 space-y-3">
             <div className="eyebrow">Permit issued · {signed.map((x) => x.name).join(" + ")}</div>
             <PermitTicket permit={permit} status={checks?.every((c) => c.ok) ? "used" : "authorized"} />
 
@@ -1275,9 +1381,13 @@ function Explorer({
   const [kind, setKind] = useState<TabId>("all");
   const list = SURFACES.filter((s) => matchesTab(s, tab) && matchesTab(s, kind));
   return (
-    <Card className="shrink-0 shadow-card">
-      <CardHead title="Where is the agent?" sub="Every place an agent can run. Open one, then run an action — any surface, any order." />
-      <div className="flex items-center gap-2 px-6 py-4 border-t border-line">
+    <Panel
+      title="Where is the agent?"
+      sub="Every place an agent can run. Open one, then run an action."
+      reduced={reduced}
+      right={<Chip tone="muted" className="tnum">{list.length}</Chip>}
+    >
+      <div className="flex items-center gap-2 px-5 py-4">
         <Segmented size="sm" options={PLANE_TABS} value={tab} onChange={setTab} />
         <select value={kind} onChange={(e) => setKind(e.target.value as TabId)} aria-label="Kind of surface" className="h-7 rounded-full border border-line bg-surface px-3 text-[12.5px] text-fg-2 outline-none">
           {KIND_TABS.map((k) => (
@@ -1289,9 +1399,9 @@ function Explorer({
         {list.map((s) => (
           <SurfaceRow key={s.id} surface={s} open={openId === s.id} selectedActionId={selectedActionId} agent={agent} onOpen={() => setOpenId(openId === s.id ? null : s.id)} onRun={(a) => onRun(s, a)} reduced={reduced} />
         ))}
-        {!list.length && <div className="px-6 py-10 text-[12.5px] text-fg-3">No surfaces in this filter.</div>}
+        {!list.length && <div className="px-5 py-10 text-[12.5px] text-fg-3">No surfaces in this filter.</div>}
       </div>
-    </Card>
+    </Panel>
   );
 }
 
@@ -1454,15 +1564,18 @@ export function EnforcementPlayground() {
       </header>
 
       {/* the three columns */}
-      <div className="wbx-pg grid min-h-0 flex-1 gap-3 overflow-y-auto px-6 pb-4 pt-4 scroll-thin">
+      <div className="wbx-pg grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 pb-5 pt-4 scroll-thin lg:px-6">
         <div className="flex flex-col gap-3 scroll-thin pr-0.5">
+          <ColumnLabel>1 · Admin</ColumnLabel>
           <DeployCard deploy={deploy} onOnboard={() => setDeploy("onboarded")} onPush={() => setDeploy("pushed")} reduced={reduced} />
           <IntentContract enabled={enabled} onToggle={toggle} onReset={reset} reduced={reduced} />
         </div>
         <div className="flex flex-col gap-3 scroll-thin pr-0.5">
+          <ColumnLabel>2 · The fabric</ColumnLabel>
           <FabricColumn run={run} runKey={runKey} action={action} surface={surface} receipts={receipts} deploy={deploy} reduced={reduced} onAnotherAgent={anotherAgent} onGateOutcome={onGateOutcome} />
         </div>
         <div className="flex flex-col gap-3 scroll-thin pr-0.5">
+          <ColumnLabel>3 · The employee</ColumnLabel>
           <Explorer tab={tab} setTab={setTab} openId={openId} setOpenId={setOpenId} selectedActionId={sel?.actionId ?? null} agent={sel?.agent ?? ""} onRun={onRun} reduced={reduced} />
         </div>
       </div>
