@@ -34,6 +34,8 @@ import {
   Moon,
   Repeat,
   RotateCcw,
+  PanelLeftClose,
+  PanelRightClose,
   Play,
   Send,
   Server,
@@ -158,8 +160,76 @@ function Panel({
   );
 }
 
-/** The quiet label that sits above each column. */
-const ColumnLabel = ({ children }: { children: ReactNode }) => <div className="eyebrow px-1 pb-0.5">{children}</div>;
+/* ============================ whole-column collapse ============================ */
+// The three columns collapse as units, not just the cards inside them: fold one
+// away and the other two reflow to fill the row, keeping their own proportions
+// (the fabric column stays the widest of whatever is left). At least one column
+// always stays open. Below the 1100px breakpoint the columns already stack, so
+// a folded one is simply a short closed bar instead of the full stack of cards.
+type ColKey = "admin" | "fabric" | "employee";
+const COL_META: Record<ColKey, { label: string; frac: number }> = {
+  admin: { label: "Admin", frac: 1 },
+  fabric: { label: "The fabric", frac: 1.34 },
+  employee: { label: "The employee", frac: 1 },
+};
+
+function Column({
+  id,
+  index,
+  collapsed,
+  onToggle,
+  reduced,
+  children,
+}: {
+  id: ColKey;
+  index: number;
+  collapsed: boolean;
+  onToggle: () => void;
+  reduced: boolean;
+  children: ReactNode;
+}) {
+  const { label } = COL_META[id];
+  const fade = reduced ? { duration: 0.01 } : { duration: 0.22, ease: EASE };
+
+  if (collapsed) {
+    return (
+      <motion.button
+        type="button"
+        onClick={onToggle}
+        layout
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={fade}
+        aria-label={`Show ${label}`}
+        title={`Show ${label}`}
+        className="group flex w-11 shrink-0 flex-col items-center gap-3 rounded-2xl border border-line bg-surface py-4 shadow-card outline-none transition-colors hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-full"
+      >
+        <span className="grid size-6 place-items-center rounded-md text-fg-3 transition-colors group-hover:text-accent">
+          <PanelRightClose className="size-3.5" />
+        </span>
+        <span className="text-[11px] font-semibold tracking-wide text-fg-3 group-hover:text-fg-2 [writing-mode:vertical-rl]">{index}&nbsp;·&nbsp;{label}</span>
+      </motion.button>
+    );
+  }
+
+  return (
+    <motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={fade} className="flex min-w-0 flex-col gap-3 scroll-thin pr-0.5">
+      <div className="flex items-center justify-between gap-2 px-1 pb-0.5">
+        <span className="eyebrow">{index} · {label}</span>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={`Collapse ${label}`}
+          title={`Collapse ${label}`}
+          className="grid size-6 shrink-0 place-items-center rounded-md text-fg-3 transition-colors hover:bg-surface-2 hover:text-fg-2"
+        >
+          <PanelLeftClose className="size-3.5" />
+        </button>
+      </div>
+      {children}
+    </motion.div>
+  );
+}
 
 /* ============================ deploy (new, click-driven) ============================ */
 type DeployState = "idle" | "onboarded" | "pushed";
@@ -1438,6 +1508,21 @@ export function EnforcementPlayground() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
 
+  // Whole-column collapse: at least one column stays open, so toggling the last
+  // open one is a no-op rather than leaving the page blank.
+  const [collapsedCols, setCollapsedCols] = useState<Set<ColKey>>(new Set());
+  const toggleCol = (k: ColKey) =>
+    setCollapsedCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else if (next.size < 2) next.add(k);
+      return next;
+    });
+  // Collapsed columns shrink to a fixed strip; open ones share the rest of the
+  // row in their normal proportions, so two open columns still read as
+  // "half the fabric, half the rest" rather than an arbitrary split.
+  const gridCols = (Object.keys(COL_META) as ColKey[]).map((k) => (collapsedCols.has(k) ? "44px" : `${COL_META[k].frac}fr`)).join(" ");
+
   const surface = useMemo(() => SURFACES.find((s) => s.id === sel?.surfaceId) ?? null, [sel]);
   const action = useMemo(() => surface?.actions.find((a) => a.id === sel?.actionId) ?? null, [surface, sel]);
 
@@ -1531,7 +1616,7 @@ export function EnforcementPlayground() {
 
   return (
     <div style={{ ...STAGE, background: GROUND[stageTheme] }} className="fixed inset-0 flex flex-col overflow-hidden">
-      <style>{`.wbx-pg{grid-template-columns:1fr}@media(min-width:1100px){.wbx-pg{grid-template-columns:1fr 1.34fr 1fr}.wbx-pg>div{overflow-y:auto;min-height:0}}
+      <style>{`.wbx-pg{grid-template-columns:1fr}@media(min-width:1100px){.wbx-pg{grid-template-columns:var(--wbx-cols,1fr 1.34fr 1fr);align-items:start}.wbx-pg>*{min-height:0}.wbx-pg>div{overflow-y:auto}}
 @keyframes wbx-heart{0%{transform:translate(-50%,-3px);opacity:0}30%{opacity:.85}70%{opacity:.85}100%{transform:translate(-50%,17px);opacity:0}}
 .wbx-heart{animation:wbx-heart 3.4s ease-in-out infinite}
 .wbx-heart-2{animation-delay:1.7s}
@@ -1563,21 +1648,18 @@ export function EnforcementPlayground() {
         </div>
       </header>
 
-      {/* the three columns */}
-      <div className="wbx-pg grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 pb-5 pt-4 scroll-thin lg:px-6">
-        <div className="flex flex-col gap-3 scroll-thin pr-0.5">
-          <ColumnLabel>1 · Admin</ColumnLabel>
+      {/* the three columns — each collapses as a whole; the others reflow to fill the row */}
+      <div className="wbx-pg grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 pb-5 pt-4 scroll-thin lg:px-6" style={{ "--wbx-cols": gridCols } as CSSProperties}>
+        <Column id="admin" index={1} collapsed={collapsedCols.has("admin")} onToggle={() => toggleCol("admin")} reduced={reduced}>
           <DeployCard deploy={deploy} onOnboard={() => setDeploy("onboarded")} onPush={() => setDeploy("pushed")} reduced={reduced} />
           <IntentContract enabled={enabled} onToggle={toggle} onReset={reset} reduced={reduced} />
-        </div>
-        <div className="flex flex-col gap-3 scroll-thin pr-0.5">
-          <ColumnLabel>2 · The fabric</ColumnLabel>
+        </Column>
+        <Column id="fabric" index={2} collapsed={collapsedCols.has("fabric")} onToggle={() => toggleCol("fabric")} reduced={reduced}>
           <FabricColumn run={run} runKey={runKey} action={action} surface={surface} receipts={receipts} deploy={deploy} reduced={reduced} onAnotherAgent={anotherAgent} onGateOutcome={onGateOutcome} />
-        </div>
-        <div className="flex flex-col gap-3 scroll-thin pr-0.5">
-          <ColumnLabel>3 · The employee</ColumnLabel>
+        </Column>
+        <Column id="employee" index={3} collapsed={collapsedCols.has("employee")} onToggle={() => toggleCol("employee")} reduced={reduced}>
           <Explorer tab={tab} setTab={setTab} openId={openId} setOpenId={setOpenId} selectedActionId={sel?.actionId ?? null} agent={sel?.agent ?? ""} onRun={onRun} reduced={reduced} />
-        </div>
+        </Column>
       </div>
     </div>
   );
