@@ -34,8 +34,11 @@ import {
   Moon,
   Repeat,
   RotateCcw,
+  Play,
   Send,
   Server,
+  ShieldCheck,
+  ShieldAlert,
   Signature,
   Sun,
   Upload,
@@ -55,7 +58,9 @@ import {
 } from "../data/playground";
 import type { Decision } from "../data/agents";
 import type { Rule } from "../data/contract";
-import type { Verdict } from "../lib/engine";
+import type { Act, Verdict } from "../lib/engine";
+import { mintPermit, signApproval, verifyPermit, short, type Check as PermitCheck, type Permit } from "../lib/permit";
+import { Checks, PermitTicket } from "../components/permit";
 import { switchWorkspace } from "../lib/store";
 import { useNavStyle } from "../lib/navstyle";
 import { WrapboxWordmark } from "../components/logo";
@@ -99,15 +104,72 @@ const FLEET: { host: string; os: string; logo: "apple" | "ubuntu" }[] = [
   { host: "nwf-mbp-0431", os: "macOS 14.7", logo: "apple" },
 ];
 
-/** Device key id: FNV-1a over the hostname, so the same host always shows the same `dk_…`. No randomness. */
-function keyIdFor(host: string): string {
+/** FNV-1a. Every id on this page is derived, never random. */
+function hash32(seed: string): number {
   let h = 0x811c9dc5;
-  for (let i = 0; i < host.length; i++) {
-    h ^= host.charCodeAt(i);
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
     h = Math.imul(h, 0x01000193) >>> 0;
   }
-  return `dk_${h.toString(16).padStart(8, "0")}`;
+  return h >>> 0;
 }
+
+/** Device key id: FNV-1a over the hostname, so the same host always shows the same `dk_…`. */
+const keyIdFor = (host: string) => `dk_${hash32(host).toString(16).padStart(8, "0")}`;
+
+/* ============================ the review gate ============================ */
+// A REVIEW is not the end of the story: it is a request waiting on named people.
+// The roster below is the simulated directory behind each approver group the
+// rules name (`verdict.approvers`); the SIGNATURES are real — each approval is
+// an ECDSA P-256 signature over the exact action, and the permit that follows
+// is minted and verified by the same src/lib/permit.ts the main Approvals page
+// uses. Nothing here decides anything: the decision already came from the engine.
+interface Approver {
+  id: string;
+  name: string;
+  role: string;
+}
+const APPROVER_ROSTER: Record<string, Approver[]> = {
+  "sre-oncall": [
+    { id: "p_dmehta", name: "Devika Mehta", role: "SRE · on-call primary" },
+    { id: "p_rokafor", name: "Rita Okafor", role: "SRE · on-call secondary" },
+    { id: "p_tlind", name: "Tomas Lindqvist", role: "SRE · platform lead" },
+  ],
+  "payments-manager": [
+    { id: "p_jcardoso", name: "Joana Cardoso", role: "Payments · duty manager" },
+    { id: "p_akhan", name: "Ayesha Khan", role: "Payments · risk" },
+  ],
+  "platform-security": [
+    { id: "p_nberg", name: "Nils Berg", role: "Platform security" },
+    { id: "p_schen", name: "Sophie Chen", role: "Platform security · AppSec" },
+  ],
+  "cloud-security": [
+    { id: "p_mibrahim", name: "Mo Ibrahim", role: "Cloud security" },
+    { id: "p_lvargas", name: "Lucia Vargas", role: "Cloud security · IAM" },
+    { id: "p_hpark", name: "Hana Park", role: "Cloud security · lead" },
+  ],
+  "data-governance": [
+    { id: "p_ewoods", name: "Elena Woods", role: "Data governance" },
+    { id: "p_rsingh", name: "Raj Singh", role: "Data governance · privacy" },
+  ],
+};
+const rosterFor = (group?: string): Approver[] => (group && APPROVER_ROSTER[group]) || [{ id: "p_admin", name: "Workspace admin", role: group ?? "approver" }];
+
+/** The statement the permit binds to — the exact thing the approvers are signing. */
+const statementOf = (act: Act): string =>
+  act.sql ?? act.command ?? act.path ?? act.destination ?? (act.amountUsd ?? act.amount ? `${act.effect} $${(act.amountUsd ?? act.amount)!.toLocaleString("en-US")}` : act.effect);
+
+/** Exactly what gets hashed into the permit. Changing any of it invalidates the permit. */
+const argsOf = (act: Act): Record<string, unknown> => {
+  const a: Record<string, unknown> = { effect: act.effect, statement: statementOf(act) };
+  if (act.env) a.environment = act.env;
+  if (act.branch) a.branch = act.branch;
+  if (act.amountUsd ?? act.amount) a.amount_usd = act.amountUsd ?? act.amount;
+  return a;
+};
+
+/** The altered call a tamper probe models: the same request with one edit. */
+const tamperedArgs = (act: Act): Record<string, unknown> => ({ ...argsOf(act), statement: statementOf(act) + " OR 1=1" });
 
 /* ============================ rule → decision (derived, never written) ============================ */
 const RANK: Record<Decision, number> = { ALLOW: 1, CONSTRAIN: 2, REVIEW: 3, BLOCK: 4 };
@@ -515,6 +577,8 @@ interface Receipt {
   receiptId: string;
   decision: Decision;
   label: string;
+  /** Set on the follow-on record a review outcome writes (execution or denial). */
+  note?: string;
 }
 
 function EvidenceList({ receipts, reduced }: { receipts: Receipt[]; reduced: boolean }) {
@@ -534,7 +598,10 @@ function EvidenceList({ receipts, reduced }: { receipts: Receipt[]; reduced: boo
             className="flex items-center gap-3 px-6 py-2.5 border-b border-line last:border-0"
           >
             <DecisionPill d={r.decision} size="sm" />
-            <span className="min-w-0 flex-1 truncate text-[12.5px]">{r.label}</span>
+            <span className="min-w-0 flex-1 truncate text-[12.5px]">
+              {r.label}
+              {r.note && <span className="text-fg-3"> · {r.note}</span>}
+            </span>
             <span className="font-mono text-[11px] text-fg-3">{r.receiptId}</span>
           </motion.div>
         ))}
@@ -552,6 +619,7 @@ function FabricColumn({
   deploy,
   reduced,
   onAnotherAgent,
+  onGateOutcome,
 }: {
   run: RunResult | null;
   runKey: string;
@@ -561,6 +629,7 @@ function FabricColumn({
   deploy: DeployState;
   reduced: boolean;
   onAnotherAgent: () => void;
+  onGateOutcome: (o: GateOutcome) => void;
 }) {
   const [why, setWhy] = useState(false);
   useEffect(() => setWhy(false), [runKey]);
@@ -635,6 +704,18 @@ function FabricColumn({
               <div className="border-t border-line px-6 py-5">
                 <EvidenceChain rows={rows} />
               </div>
+              {run.verdict.decision === "REVIEW" && (
+                <ReviewGate
+                  key={runKey}
+                  verdict={run.verdict}
+                  act={action.act}
+                  agent={run.agent}
+                  ruleId={run.verdict.rule}
+                  decisionId={run.receiptId}
+                  reduced={reduced}
+                  onOutcome={onGateOutcome}
+                />
+              )}
               <div className="flex flex-wrap items-center gap-2 border-t border-line px-6 py-3.5">
                 <Button variant="secondary" size="sm" onClick={() => setWhy(true)}><HelpCircle className="size-3.5" /> Why?</Button>
                 <Button variant="secondary" size="sm" onClick={onAnotherAgent}><Repeat className="size-3.5" /> Try another agent</Button>
@@ -684,6 +765,210 @@ function FabricColumn({
         )}
       </Drawer>
     </Card>
+  );
+}
+
+/* ---- the review gate: a held request, its approvers, and the permit ---- */
+interface GateOutcome {
+  kind: "executed" | "denied";
+  by: string;
+  permitId?: string;
+}
+
+function ReviewGate({
+  verdict,
+  act,
+  agent,
+  ruleId,
+  decisionId,
+  reduced,
+  onOutcome,
+}: {
+  verdict: Verdict;
+  act: Act;
+  agent: string;
+  ruleId: string;
+  decisionId: string;
+  reduced: boolean;
+  onOutcome: (o: GateOutcome) => void;
+}) {
+  const roster = rosterFor(verdict.approvers);
+  const quorum = Math.min(verdict.quorum ?? 1, roster.length);
+
+  const [signed, setSigned] = useState<{ id: string; name: string; sig: string }[]>([]);
+  const [denied, setDenied] = useState<Approver | null>(null);
+  const [permit, setPermit] = useState<Permit | null>(null);
+  const [checks, setChecks] = useState<PermitCheck[] | null>(null);
+  const [probe, setProbe] = useState<PermitCheck[] | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const met = signed.length >= quorum;
+
+  // One approval = one real ECDSA signature over this exact action.
+  const approve = async (p: Approver) => {
+    if (busy || denied || signed.some((x) => x.id === p.id)) return;
+    setBusy(true);
+    const sig = await signApproval(p.id, { gate: ruleId, args: argsOf(act) });
+    setSigned((prev) => [...prev, { id: p.id, name: p.name, sig }]);
+    setBusy(false);
+  };
+
+  // Quorum reached → the control plane mints the permit, bound to these args.
+  useEffect(() => {
+    if (!met || permit || denied) return;
+    let live = true;
+    (async () => {
+      const minted = await mintPermit({
+        decision_id: decisionId,
+        subject_agent: agent,
+        on_behalf_of: signed[0]?.name ?? "the requester",
+        action: act.effect,
+        resource: statementOf(act).slice(0, 48),
+        environment: String(act.env ?? "production"),
+        approved_by: signed.map((x) => x.name),
+        args: argsOf(act),
+        ttl: 60,
+      });
+      if (live) setPermit(minted);
+    })();
+    return () => {
+      live = false;
+    };
+  }, [met, permit, denied, decisionId, agent, act, signed]);
+
+  // The executor's own check, before it performs the effect. Consumes the nonce.
+  const runIt = async () => {
+    if (!permit || busy || checks) return;
+    setBusy(true);
+    const c = await verifyPermit(permit, argsOf(act));
+    setChecks(c);
+    setBusy(false);
+    if (c.every((x) => x.ok)) onOutcome({ kind: "executed", by: signed.map((x) => x.name).join(" + "), permitId: permit.id });
+  };
+
+  // The same permit presented with an altered statement — refused on the args hash.
+  const probeIt = async () => {
+    if (!permit || busy) return;
+    setBusy(true);
+    setProbe(await verifyPermit(permit, tamperedArgs(act), { consume: false, probe: true }));
+    setBusy(false);
+  };
+
+  const deny = (p: Approver) => {
+    if (busy || permit) return;
+    setDenied(p);
+    onOutcome({ kind: "denied", by: p.name });
+  };
+
+  const fade = reduced ? { duration: 0.01 } : { duration: 0.28, ease: EASE };
+
+  return (
+    <div className="border-t border-line">
+      <div className="flex items-center justify-between gap-3 px-6 pt-4 pb-3">
+        <div className="eyebrow flex items-center gap-1.5">
+          <ShieldCheck className="size-3.5 text-review" /> Held for approval
+        </div>
+        <span className="font-mono text-[11.5px] text-fg-3 tnum">
+          {signed.length}/{quorum} signed
+        </span>
+      </div>
+
+      <div className="px-6 pb-3">
+        <p className="text-[12.5px] leading-relaxed text-fg-2">
+          {verdict.approvers} — {quorum === 1 ? "one approval" : `${quorum} approvals`} required. Each approval is signed with that person&rsquo;s own key over the exact statement below; the
+          permit that follows is bound to it and may be used once.
+        </p>
+        <div className="mt-2.5 break-all rounded-lg border border-line bg-surface-2 px-3 py-2 font-mono text-[11.5px] leading-snug text-fg">{statementOf(act)}</div>
+      </div>
+
+      {/* the approvers */}
+      <div>
+        {roster.map((p, i) => {
+          const mine = signed.find((x) => x.id === p.id);
+          return (
+            <div key={p.id} className={cn("flex items-center gap-3 px-6 py-3", i < roster.length - 1 && "border-b border-line")}>
+              <span className={cn("grid size-7 shrink-0 place-items-center rounded-full text-[11px] font-semibold", mine ? "bg-allow-soft text-allow" : "bg-surface-2 text-fg-2 border border-line")}>
+                {mine ? <Check className="size-3.5" /> : p.name.split(" ").map((w) => w[0]).join("")}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-semibold">{p.name}</div>
+                <div className="truncate text-[11.5px] text-fg-3">{mine ? <span className="font-mono">{mine.sig}</span> : p.role}</div>
+              </div>
+              {mine ? (
+                <Chip tone="allow">signed</Chip>
+              ) : denied || permit ? (
+                <span className="text-[11.5px] text-fg-3">—</span>
+              ) : (
+                <Button size="sm" variant="secondary" onClick={() => approve(p)} disabled={busy}>
+                  Approve as {p.name.split(" ")[0]}
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* deny, while it is still open */}
+      {!permit && !denied && (
+        <div className="flex items-center gap-2 border-t border-line px-6 py-3">
+          <Button size="sm" variant="danger" onClick={() => deny(roster[0])} disabled={busy}>
+            <ShieldAlert className="size-3.5" /> Deny
+          </Button>
+          <span className="text-[12px] text-fg-3">A denied request never runs. The refusal is signed too.</span>
+        </div>
+      )}
+
+      <AnimatePresence initial={false}>
+        {denied && (
+          <motion.div key="denied" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={fade} className="border-t border-line px-6 py-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <DecisionPill d="BLOCK" />
+              <span className="text-[13px] font-semibold">Denied by {denied.name}</span>
+            </div>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-fg-2">No permit was minted, so the action has nothing to present to the executor. It never ran.</p>
+          </motion.div>
+        )}
+
+        {permit && (
+          <motion.div key="permit" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={fade} className="border-t border-line px-6 py-4 space-y-3">
+            <div className="eyebrow">Permit issued · {signed.map((x) => x.name).join(" + ")}</div>
+            <PermitTicket permit={permit} status={checks?.every((c) => c.ok) ? "used" : "authorized"} />
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="primary" onClick={runIt} disabled={busy || !!checks}>
+                <Play className="size-3.5" /> {checks ? "Ran once" : "Run it under the permit"}
+              </Button>
+              <Button size="sm" variant="secondary" onClick={probeIt} disabled={busy}>
+                <Repeat className="size-3.5" /> Try a changed statement
+              </Button>
+            </div>
+
+            {checks && (
+              <div className="rounded-xl border border-line bg-surface-2 p-3.5">
+                <div className="eyebrow mb-2">What the executor checked before running it</div>
+                <Checks checks={checks} />
+                <p className="mt-2.5 text-[12.5px] leading-relaxed text-fg-2">
+                  {checks.every((c) => c.ok)
+                    ? "All four passed, so the effect ran — once. The nonce is now spent: the same permit presented again is refused."
+                    : "A check failed, so the executor refused it."}
+                </p>
+              </div>
+            )}
+
+            {probe && (
+              <div className="rounded-xl border border-line bg-surface-2 p-3.5">
+                <div className="eyebrow mb-2">The same permit, an altered statement</div>
+                <Checks checks={probe} />
+                <p className="mt-2.5 text-[12.5px] leading-relaxed text-fg-2">
+                  The permit carries <span className="font-mono text-[11.5px]">{short(permit.args_hash)}</span> — the hash of what the approvers signed. A different statement hashes
+                  differently, so the approval cannot be carried over to it.
+                </p>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -1005,6 +1290,27 @@ export function EnforcementPlayground() {
     );
   }, [runKey, run, action]);
 
+  // A review outcome is a SECOND decision event: the held request was released
+  // under a permit, or refused. It gets its own record rather than overwriting
+  // the REVIEW — an evidence ledger must keep both halves of the story.
+  const onGateOutcome = (o: GateOutcome) => {
+    if (!run || !action) return;
+    setReceipts((prev) => {
+      const id = `WB-${10000 + (hash32(`${runKey}|${o.kind}`) % 90000)}`;
+      if (prev.some((r) => r.receiptId === id)) return prev;
+      return [
+        {
+          key: `${runKey}:${o.kind}`,
+          receiptId: id,
+          decision: (o.kind === "executed" ? "ALLOW" : "BLOCK") as Decision,
+          label: action.label,
+          note: o.kind === "executed" ? `released under ${o.permitId} · ${o.by}` : `denied by ${o.by}`,
+        },
+        ...prev,
+      ].slice(0, 12);
+    });
+  };
+
   const onRun = (s: Surface, a: ScenarioAction) => {
     setSel((prev) => ({ surfaceId: s.id, actionId: a.id, agent: prev?.actionId === a.id ? prev.agent : a.defaultAgent, n: (prev?.n ?? 0) + 1 }));
   };
@@ -1091,7 +1397,7 @@ export function EnforcementPlayground() {
           <IntentContract enabled={enabled} onToggle={toggle} onReset={reset} reduced={reduced} />
         </div>
         <div className="flex flex-col gap-3 scroll-thin pr-0.5">
-          <FabricColumn run={run} runKey={runKey} action={action} surface={surface} receipts={receipts} deploy={deploy} reduced={reduced} onAnotherAgent={anotherAgent} />
+          <FabricColumn run={run} runKey={runKey} action={action} surface={surface} receipts={receipts} deploy={deploy} reduced={reduced} onAnotherAgent={anotherAgent} onGateOutcome={onGateOutcome} />
         </div>
         <div className="flex flex-col gap-3 scroll-thin pr-0.5">
           <Explorer tab={tab} setTab={setTab} openId={openId} setOpenId={setOpenId} selectedActionId={sel?.actionId ?? null} agent={sel?.agent ?? ""} onRun={onRun} reduced={reduced} />
