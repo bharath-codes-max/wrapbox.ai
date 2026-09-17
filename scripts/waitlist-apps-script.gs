@@ -5,7 +5,7 @@
  *   1. the sheet          — one row per signup, de-duplicated by email
  *   2. the welcome email  — sent from your own Gmail via MailApp (free quota: 100/day
  *                           on a consumer account, 1,500/day on Workspace)
- *   3. the public count   — the real number of rows, for the landing page counter
+ *   3. the row count      — available via doGet/action:'count' for any internal use
  *
  * ── SETUP (once, ~4 minutes) ────────────────────────────────────────────────
  * 1. Create a Google Sheet (sheet.new). Name the first tab exactly:  waitlist
@@ -46,10 +46,14 @@ function book_() {
   return ss;
 }
 
-var HEADERS = ['position', 'joined_at', 'name', 'email', 'phone', 'company', 'company_url', 'message', 'welcome_sent', 'last_newsletter'];
-// The layout before name/phone/company_url/message existed — needed only to
-// migrate a sheet created before this version, without losing its rows.
-var OLD_HEADERS = ['position', 'joined_at', 'email', 'role', 'company', 'welcome_sent', 'last_newsletter'];
+// Current layout. Role is free text (a searched-or-typed job title from the
+// form), not the old fixed enum — there is no newsletter feature anymore, so
+// there is no last_newsletter column either.
+var HEADERS = ['position', 'joined_at', 'name', 'email', 'phone', 'role', 'company', 'company_url', 'message', 'welcome_sent'];
+// Two earlier layouts this migrates FROM, oldest first, so a sheet at either
+// point gets remapped into HEADERS rather than corrupted by a blind append.
+var HEADERS_V1 = ['position', 'joined_at', 'email', 'role', 'company', 'welcome_sent', 'last_newsletter'];
+var HEADERS_V2 = ['position', 'joined_at', 'name', 'email', 'phone', 'company', 'company_url', 'message', 'welcome_sent', 'last_newsletter'];
 
 /** Run once from the editor: creates the tab, or migrates it to the current column layout. */
 function setupSheet() {
@@ -66,16 +70,24 @@ function setupSheet() {
   var current = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
   if (current.join('|') === HEADERS.join('|')) return 'already up to date';
 
-  if (current.join('|') === OLD_HEADERS.join('|')) {
-    // Real migration, not a blind column append: the field ORDER changed
-    // (name/phone/company_url/message were inserted in the middle), so the
-    // old rows are re-mapped into the new layout rather than shifted.
-    var last = sh.getLastRow();
-    var old = last > 1 ? sh.getRange(2, 1, last - 1, OLD_HEADERS.length).getValues() : [];
-    var migrated = old.map(function (r) {
-      // old: [position, joined_at, email, role, company, welcome_sent, last_newsletter]
-      return [r[0], r[1], '', r[2], '', r[4], '', '', r[5], r[6]];
+  var last = sh.getLastRow();
+  var migrated = null;
+
+  if (current.join('|') === HEADERS_V1.join('|')) {
+    // old: [position, joined_at, email, role, company, welcome_sent, last_newsletter]
+    var oldV1 = last > 1 ? sh.getRange(2, 1, last - 1, HEADERS_V1.length).getValues() : [];
+    migrated = oldV1.map(function (r) {
+      return [r[0], r[1], '', r[2], '', r[3], r[4], '', '', r[5]];
     });
+  } else if (current.join('|') === HEADERS_V2.join('|')) {
+    // old: [position, joined_at, name, email, phone, company, company_url, message, welcome_sent, last_newsletter]
+    var oldV2 = last > 1 ? sh.getRange(2, 1, last - 1, HEADERS_V2.length).getValues() : [];
+    migrated = oldV2.map(function (r) {
+      return [r[0], r[1], r[2], r[3], r[4], '', r[5], r[6], r[7], r[8]];
+    });
+  }
+
+  if (migrated) {
     sh.clearContents();
     sh.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]).setFontWeight('bold');
     if (migrated.length) sh.getRange(2, 1, migrated.length, HEADERS.length).setValues(migrated);
@@ -137,6 +149,7 @@ function doPost(e) {
     // honest value rather than something to reject.
     var name = String(body.name || '').trim();
     var phone = String(body.phone || '').trim();
+    var role = String(body.role || '').trim();
     var company = String(body.company || '').trim();
     var companyUrl = String(body.companyUrl || '').trim();
     var message = String(body.message || '').trim();
@@ -152,7 +165,7 @@ function doPost(e) {
     if (SEND_WELCOME_EMAIL) {
       try { sendWelcome_(email, position, name); sent = true; } catch (err) { sent = false; }
     }
-    sh.appendRow([position, new Date(), name, email, phone, company, companyUrl, message, sent ? 'yes' : 'no', '']);
+    sh.appendRow([position, new Date(), name, email, phone, role, company, companyUrl, message, sent ? 'yes' : 'no']);
 
     return json_({ ok: true, position: position, duplicate: false, count: Math.max(0, sh.getLastRow() - 1) });
   } catch (err) {
@@ -260,211 +273,3 @@ function step_(n, title, body, line, ink, muted) {
   '</tr></table>';
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
- * NEWSLETTER — send a product update to everyone on the waitlist, free,
- * from your own Gmail. Nothing here touches doGet/doPost, so editing or
- * running this needs NO redeploy — just Save, then Run ▸ sendNewsletter.
- *
- * HOW IT WORKS
- *   Bump NEWSLETTER_VERSION below each time you have a new update, edit
- *   NEWSLETTER (the only part you should need to touch), Save, then run
- *   sendNewsletter from the function dropdown. It emails everyone whose
- *   `last_newsletter` column isn't already this version — so re-running
- *   after an error, or after new people join, never double-sends the same
- *   edition to anyone who already got it.
- *
- * QUOTA (free, no card): ~100 emails/day on a personal Gmail, ~1,500/day on
- * Google Workspace (hello@wrapbox.io is Workspace, so 1,500/day). A list
- * bigger than that sends in batches automatically — MAX_PER_RUN below caps
- * how many go out in one click, so you never blow the daily quota by
- * accident; just run it again to continue the rest.
- * ══════════════════════════════════════════════════════════════════════════ */
-
-var SITE = 'https://wrapbox-prototype.vercel.app';
-// Stable, public image URLs (public/email/ in the repo — never hashed by the build,
-// so a sent email keeps working after every deploy).
-var LOGO_URL = SITE + '/email/wordmark.png';
-var HERO_URL = SITE + '/email/terminal.jpg';
-// The prism gradient — the same one .prism-swatch draws across the product
-// (the Deploy card's hairline, the "Most popular" badge, the Get-started
-// hero). Reused here so the email carries the one visual signature that
-// actually identifies Wrapbox, instead of a flat navy template band.
-var PRISM = 'linear-gradient(120deg, #ff6a3d, #ff9fcf 50%, #9a82f7)';
-
-var NEWSLETTER_VERSION = 'v2';     // bump this string for every new edition you send
-var MAX_PER_RUN = 450;             // headroom under the 1,500/day Workspace quota
-
-// ── Edit this block for each edition. Plain text and simple arrays only —
-// the HTML layout below turns it into the designed email automatically. ──
-var NEWSLETTER = {
-  subject: "What's shipping in Wrapbox",
-  kicker: 'Product update',
-  headline: 'Every agent action now gets a signed receipt.',
-  intro:
-    "Since you joined the waitlist we've shipped the pieces that make Wrapbox " +
-    'a runtime layer, not a linter: real OS-level enforcement, a signed evidence ' +
-    'chain, and human approvals you sign with a passkey instead of a click.',
-  updates: [
-    {
-      title: 'Runtime enforcement, not just logging',
-      body: 'Apple Endpoint Security on macOS and kernel-level confinement on Linux stop a disallowed action before it runs — not after.',
-    },
-    {
-      title: 'Approvals are signed, not clicked',
-      body: 'A held request routes to the right approver in Slack or Teams. They see the exact statement, sign with a passkey, and the permit is bound to those exact arguments.',
-    },
-    {
-      title: 'Evidence you can hand an auditor',
-      body: 'Human → agent → rule → permit → outcome, hash-chained for every decision. Filter by environment, person or agent.',
-    },
-  ],
-  ctaLabel: 'See the policy engine in action',
-  ctaUrl: SITE + '/#/landing',
-  heroAlt: 'Claude Code tries four things in a row: a force-push gets rewritten, a secrets read and a push to main are blocked, a production delete is held for review.',
-  heroCaption: 'One agent, four attempts, four different outcomes — the real engine, not a mockup.',
-};
-
-// Company details for the legal footer every commercial bulk email needs
-// (CAN-SPAM requires a physical postal address on marketing mail).
-var COMPANY = {
-  legalName: 'Wrapbox Inc.',
-  addressLine: '8 The Green, Ste B',
-  cityLine: 'Dover, Delaware 19901',
-  phone: '+1 (302) 506-9767',
-};
-
-// Real tiers from the pricing page — kept in one place so the newsletter
-// can never drift from what the site actually charges.
-var TIERS = [
-  { name: 'Starter', unit: 'free forever', blurb: 'For a founder or a small team trying agents safely.' },
-  { name: 'Team', unit: 'per person / month', blurb: 'For teams putting coding and business agents into daily work.' },
-  { name: 'Business', unit: 'per person / month', blurb: 'For companies rolling agents out across departments.' },
-  { name: 'Enterprise', unit: 'annual contract', blurb: 'For regulated companies with their own security and data rules.' },
-];
-
-/** Run this from the editor whenever you have an update to send. */
-function sendNewsletter() {
-  var sh = sheet_();
-  var last = sh.getLastRow();
-  if (last < 2) return 'nobody on the list yet';
-
-  var rows = sh.getRange(2, 1, last - 1, HEADERS.length).getValues();  // A:J
-  var sent = 0, skipped = 0, failed = 0;
-
-  for (var i = 0; i < rows.length; i++) {
-    if (sent >= MAX_PER_RUN) break;
-    var r = rows[i];
-    var email = String(r[3] || '').trim();          // column D
-    var already = String(r[9] || '');                // column J = last_newsletter
-    if (!email) continue;
-    if (already === NEWSLETTER_VERSION) { skipped++; continue; }
-
-    try {
-      MailApp.sendEmail(email, NEWSLETTER.subject, newsletterText_(), { name: FROM_NAME, htmlBody: newsletterHtml_() });
-      sh.getRange(i + 2, 10).setValue(NEWSLETTER_VERSION);   // column J
-      sent++;
-    } catch (err) {
-      failed++;
-    }
-  }
-  var msg = 'sent ' + sent + ', already had ' + NEWSLETTER_VERSION + ': ' + skipped + ', failed: ' + failed +
-    (sent >= MAX_PER_RUN ? ' — hit the per-run cap, run again for the rest' : '');
-  Logger.log(msg);
-  return msg;
-}
-
-function newsletterText_() {
-  var lines = [NEWSLETTER.headline, '', NEWSLETTER.intro, ''];
-  NEWSLETTER.updates.forEach(function (u) { lines.push('• ' + u.title + ' — ' + u.body); });
-  lines.push('', NEWSLETTER.ctaLabel + ': ' + NEWSLETTER.ctaUrl, '', '— The ' + BRAND + ' team');
-  return lines.join('\n');
-}
-
-function newsletterHtml_() {
-  var ink = '#111c35', muted = '#4a5061', faint = '#8a8e99', line = '#e6e5e0', paper = '#fafaf8', accent = '#1848ff';
-
-  var updatesHtml = NEWSLETTER.updates.map(function (u) {
-    return '' +
-    '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin-bottom:14px;"><tr>' +
-      '<td style="width:8px;vertical-align:top;padding-top:5px;"><div style="width:6px;height:6px;border-radius:999px;background:' + accent + ';"></div></td>' +
-      '<td style="vertical-align:top;padding-left:12px;">' +
-        '<div style="font-size:14px;font-weight:600;color:' + ink + ';">' + u.title + '</div>' +
-        '<div style="font-size:13.5px;line-height:1.6;color:' + muted + ';margin-top:3px;">' + u.body + '</div>' +
-      '</td>' +
-    '</tr></table>';
-  }).join('');
-
-  var tiersHtml = TIERS.map(function (t) {
-    return '' +
-    '<td style="width:25%;vertical-align:top;padding:0 4px;">' +
-      '<div style="border:1px solid ' + line + ';border-top:3px solid transparent;border-image:' + PRISM + ';border-image-slice:1;border-radius:10px;padding:13px 10px;">' +
-        '<div style="font-size:13px;font-weight:600;color:' + ink + ';">' + t.name + '</div>' +
-        '<div style="font-size:10.5px;color:' + faint + ';margin-top:2px;">' + t.unit + '</div>' +
-        '<div style="font-size:11.5px;line-height:1.5;color:' + muted + ';margin-top:6px;">' + t.blurb + '</div>' +
-      '</div>' +
-    '</td>';
-  }).join('');
-
-  return '' +
-  '<div style="margin:0;padding:32px 16px;background:' + paper + ';font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Helvetica,Arial,sans-serif;">' +
-    '<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid ' + line + ';border-radius:16px;overflow:hidden;">' +
-
-      // The prism strip — the product's one recurring signature moment.
-      '<div style="height:4px;background:' + PRISM + ';"></div>' +
-
-      // Brand bar: the real wordmark, on white so the navy mark reads properly.
-      '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>' +
-        '<td style="padding:20px 28px 4px;">' +
-          '<img src="' + LOGO_URL + '" width="128" alt="' + BRAND + '" style="display:block;width:128px;height:auto;border:0;" />' +
-        '</td>' +
-        '<td style="padding:20px 28px 4px;text-align:right;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:' + faint + ';white-space:nowrap;">' + NEWSLETTER.kicker + '</td>' +
-      '</tr></table>' +
-
-      // The product itself, contained with real margins rather than bled
-      // edge-to-edge — framed like the product's own window screenshots.
-      '<div style="padding:14px 28px 4px;">' +
-        '<a href="' + NEWSLETTER.ctaUrl + '" style="display:block;text-decoration:none;border-radius:12px;overflow:hidden;border:1px solid ' + line + ';">' +
-          '<img src="' + HERO_URL + '" width="504" alt="' + NEWSLETTER.heroAlt + '" style="display:block;width:100%;max-width:504px;height:auto;border:0;" />' +
-        '</a>' +
-        '<div style="margin-top:9px;font-size:11.5px;line-height:1.5;color:' + faint + ';">' + NEWSLETTER.heroCaption + '</div>' +
-      '</div>' +
-
-      '<div style="padding:24px 28px 0;">' +
-        '<div style="font-size:22px;font-weight:600;color:' + ink + ';letter-spacing:-0.02em;line-height:1.3;">' + NEWSLETTER.headline + '</div>' +
-        '<p style="margin:14px 0 0;font-size:14.5px;line-height:1.65;color:' + muted + ';">' + NEWSLETTER.intro + '</p>' +
-      '</div>' +
-
-      '<div style="padding:24px 28px 6px;">' +
-        '<div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:' + faint + ';padding-bottom:12px;">What shipped</div>' +
-        updatesHtml +
-      '</div>' +
-
-      '<div style="padding:8px 28px 4px;">' +
-        '<a href="' + NEWSLETTER.ctaUrl + '" style="display:inline-block;background:' + PRISM + ';color:#ffffff;text-decoration:none;font-size:13.5px;font-weight:700;padding:12px 22px;border-radius:999px;box-shadow:0 8px 20px -8px rgba(154,130,247,0.55);">' + NEWSLETTER.ctaLabel + ' →</a>' +
-      '</div>' +
-
-      '<div style="padding:26px 28px 8px;">' +
-        '<div style="border-top:1px solid ' + line + ';padding-top:18px;">' +
-          '<div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:' + faint + ';padding-bottom:10px;">Plans, unchanged</div>' +
-          '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:separate;border-spacing:0;"><tr>' + tiersHtml + '</tr></table>' +
-        '</div>' +
-      '</div>' +
-
-      '<div style="padding:26px 28px 4px;">' +
-        '<div style="font-size:13.5px;line-height:1.6;color:' + ink + ';">' +
-          'Warm regards,<br />The ' + BRAND + ' Team' +
-        '</div>' +
-      '</div>' +
-
-      // The legal footer: a physical address and the unsubscribe line are
-      // required on commercial bulk email (CAN-SPAM), not decoration.
-      '<div style="padding:22px 28px 26px;">' +
-        '<div style="border-top:1px solid ' + line + ';padding-top:16px;font-size:11.5px;line-height:1.65;color:' + faint + ';">' +
-          '<div>' + COMPANY.legalName + ' · ' + COMPANY.addressLine + ' · ' + COMPANY.cityLine + ' · ' + COMPANY.phone + '</div>' +
-          '<div style="margin-top:4px;">© ' + new Date().getFullYear() + ' ' + COMPANY.legalName.replace(/\.$/, '') + '. All rights reserved. You’re getting this because you joined the ' + BRAND + ' waitlist — reply and ask to be removed at any time.</div>' +
-        '</div>' +
-      '</div>' +
-
-    '</div>' +
-  '</div>';
-}

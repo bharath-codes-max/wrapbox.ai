@@ -61,7 +61,7 @@ export default async function handler(req: { method?: string; body?: unknown }, 
   if (req.method !== "POST") return res.status(405).json({ error: "method not allowed" });
   if (!url) return res.status(501).json({ error: "The waitlist is not connected yet.", configured: false });
 
-  let body: { name?: string; email?: string; phone?: string; company?: string; companyUrl?: string; message?: string } = {};
+  let body: { name?: string; email?: string; phone?: string; role?: string; company?: string; companyUrl?: string; message?: string } = {};
   try {
     body = typeof req.body === "string" ? JSON.parse(req.body) : ((req.body ?? {}) as typeof body);
   } catch {
@@ -77,12 +77,13 @@ export default async function handler(req: { method?: string; body?: unknown }, 
 
   const name = (body.name ?? "").toString().trim().slice(0, 120);
   const phone = (body.phone ?? "").toString().trim().slice(0, 40);
+  const role = (body.role ?? "").toString().trim().slice(0, 120);
   const company = (body.company ?? "").toString().trim().slice(0, 120);
   const companyUrl = (body.companyUrl ?? "").toString().trim().slice(0, 300);
   const message = (body.message ?? "").toString().trim().slice(0, 1000);
 
   try {
-    const out = await callScript(url, { action: "join", name, email, phone, company, companyUrl, message });
+    const out = await callScript(url, { action: "join", name, email, phone, role, company, companyUrl, message });
     if (!out.ok || typeof out.position !== "number") {
       return res.status(502).json({ error: out.error ? "The waitlist is having a moment. Try again shortly." : "Could not reach the waitlist." });
     }

@@ -781,7 +781,15 @@ function Pricing() {
 // no account, no CORS issue, returns name + domain) with a manual fallback
 // for anyone whose company isn't in it. Picking a suggestion also fills the
 // (optional) company URL, which stays editable either way.
+//
+// Role uses the same pattern against a self-hosted list instead of a third
+// party: no free, keyless, CORS-open "global standard job title" API exists
+// to call directly from a browser, so public/data/job-titles.json holds a
+// curated set of standard titles (drawn from common occupational taxonomies)
+// and the combobox filters it client-side — same UX, same "type it in
+// manually" escape hatch, honestly a local list rather than a live lookup.
 const REQUIRED_LABEL = <span className="ml-1 text-block">*</span>;
+const JOB_TITLES_URL = "/data/job-titles.json";
 
 interface CompanySuggestion {
   name: string;
@@ -816,20 +824,42 @@ function useCompanySuggestions(query: string, enabled: boolean) {
   return items;
 }
 
+// Fetched once per page load and cached at module scope — it's a small,
+// static file, not a per-keystroke network call.
+let jobTitlesPromise: Promise<string[]> | null = null;
+function useJobTitleSuggestions(query: string, enabled: boolean) {
+  const [all, setAll] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!enabled || all) return;
+    jobTitlesPromise ??= fetch(JOB_TITLES_URL)
+      .then((r) => (r.ok ? r.json() : []))
+      .catch(() => []);
+    jobTitlesPromise.then((rows) => setAll(Array.isArray(rows) ? rows : []));
+  }, [enabled, all]);
+
+  const q = query.trim().toLowerCase();
+  if (!enabled || !all || q.length < 1) return [];
+  return all.filter((t) => t.toLowerCase().includes(q)).slice(0, 7);
+}
+
 function Waitlist() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [role, setRole] = useState("");
   const [company, setCompany] = useState("");
   const [companyUrl, setCompanyUrl] = useState("");
   const [message, setMessage] = useState("");
   const [manualCompany, setManualCompany] = useState(false);
   const [companyOpen, setCompanyOpen] = useState(false);
+  const [manualRole, setManualRole] = useState(false);
+  const [roleOpen, setRoleOpen] = useState(false);
   const [state, setState] = useState<"idle" | "sending">("idle");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<WlDone | null>(null);
 
   const suggestions = useCompanySuggestions(company, companyOpen && !manualCompany);
+  const roleSuggestions = useJobTitleSuggestions(role, roleOpen && !manualRole);
 
   const pickCompany = (c: CompanySuggestion) => {
     setCompany(c.name);
@@ -839,6 +869,14 @@ function Waitlist() {
   const useManualCompany = () => {
     setManualCompany(true);
     setCompanyOpen(false);
+  };
+  const pickRole = (t: string) => {
+    setRole(t);
+    setRoleOpen(false);
+  };
+  const useManualRole = () => {
+    setManualRole(true);
+    setRoleOpen(false);
   };
 
   // Deliberately permissive: every field but the message reads as required in
@@ -856,7 +894,7 @@ function Waitlist() {
       const r = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, email, phone, company, companyUrl, message }),
+        body: JSON.stringify({ name, email, phone, role, company, companyUrl, message }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok || !d?.ok) {
@@ -1014,10 +1052,73 @@ function Waitlist() {
                       </div>
                     </div>
 
-                    <label htmlFor="wl-url" className="mt-4 block text-[13px] font-medium text-fg">
-                      Company URL <span className="font-normal text-fg-3">— optional</span>
-                    </label>
-                    <input id="wl-url" type="url" value={companyUrl} onChange={(e) => setCompanyUrl(e.target.value)} placeholder="https://northwindfinancial.com" className={fieldClass} />
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      {/* Job role: same search-or-type pattern as Company, against a curated standard list. */}
+                      <div className="relative">
+                        <label htmlFor="wl-role" className="block text-[13px] font-medium text-fg">
+                          Job role {REQUIRED_LABEL}
+                        </label>
+                        {manualRole ? (
+                          <input id="wl-role" value={role} onChange={(e) => setRole(e.target.value)} placeholder="Your job title" autoFocus className={fieldClass} />
+                        ) : (
+                          <input
+                            id="wl-role"
+                            value={role}
+                            onChange={(e) => {
+                              setRole(e.target.value);
+                              setRoleOpen(true);
+                            }}
+                            onFocus={() => setRoleOpen(true)}
+                            onBlur={() => setTimeout(() => setRoleOpen(false), 150)}
+                            placeholder="Start typing — Security Engineer…"
+                            autoComplete="off"
+                            role="combobox"
+                            aria-expanded={roleOpen}
+                            aria-autocomplete="list"
+                            className={fieldClass}
+                          />
+                        )}
+                        <AnimatePresence>
+                          {roleOpen && !manualRole && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute inset-x-0 top-full z-20 mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-line bg-surface shadow-[0_20px_50px_-20px_rgba(17,17,19,0.35)]"
+                            >
+                              {roleSuggestions.map((t) => (
+                                <button key={t} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pickRole(t)} className="block w-full truncate px-3.5 py-2.5 text-left text-[13.5px] text-fg hover:bg-bg">
+                                  {t}
+                                </button>
+                              ))}
+                              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={useManualRole} className="flex w-full items-center gap-2 border-t border-line px-3.5 py-2.5 text-left text-[13px] font-medium text-fg-2 hover:bg-bg hover:text-fg">
+                                Can't find it — type it in manually
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                        {manualRole && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setManualRole(false);
+                              setRole("");
+                            }}
+                            className="mt-1.5 text-[12px] text-fg-3 hover:text-fg"
+                          >
+                            Search job titles instead
+                          </button>
+                        )}
+                      </div>
+
+                      <div>
+                        <label htmlFor="wl-url" className="block text-[13px] font-medium text-fg">
+                          Company URL <span className="font-normal text-fg-3">— optional</span>
+                        </label>
+                        <input id="wl-url" type="url" value={companyUrl} onChange={(e) => setCompanyUrl(e.target.value)} placeholder="https://northwindfinancial.com" className={fieldClass} />
+                      </div>
+                    </div>
 
                     <label htmlFor="wl-message" className="mt-4 block text-[13px] font-medium text-fg">
                       Message <span className="font-normal text-fg-3">— optional</span>
