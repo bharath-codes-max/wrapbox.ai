@@ -30,7 +30,7 @@ const STAGE: CSSProperties = {
 function Stage({ n, children, className }: { n: number; children: ReactNode; className?: string }) {
   return (
     <section id={`s${n}`} className="flex h-screen w-full snap-start snap-always items-center justify-center">
-      <div style={STAGE} className={cn("relative overflow-hidden rounded-[1.1cqw] border border-line bg-bg text-fg shadow-[0_40px_90px_-30px_rgba(17,28,53,0.28)]", className)}>
+      <div style={STAGE} className={cn("relative overflow-hidden rounded-[1.1cqw] border border-line bg-bg text-fg", className)}>
         {children}
         <div className="pointer-events-none absolute bottom-[2.1cqw] right-[2.6cqw] font-mono text-[0.9cqw] tabular-nums text-fg-3">
           {String(n).padStart(2, "0")} / {TOTAL}
@@ -48,7 +48,7 @@ function Backdrop({ children, className }: { children: ReactNode; className?: st
 /** A framed window, the way the landing page frames the app. */
 function Window({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
   return (
-    <div className={cn("overflow-hidden rounded-[0.9cqw] bg-white ring-1 ring-black/10 shadow-[0_40px_90px_-30px_rgba(30,10,40,0.55)]", className)}>
+    <div className={cn("overflow-hidden rounded-[0.9cqw] bg-white ring-1 ring-black/10", className)}>
       <div className="flex h-[2.1cqw] items-center gap-[0.7cqw] border-b border-black/[0.06] bg-[#f3f2ee] px-[0.9cqw]">
         <span className="flex gap-[0.35cqw]">
           <span className="size-[0.6cqw] rounded-full bg-[#ff5f57]" />
@@ -240,7 +240,7 @@ export function Pitch() {
   }, []);
 
   return (
-    <div className="h-screen snap-y snap-mandatory overflow-y-auto bg-surface-2 scroll-thin" style={{ fontFamily: "var(--font-sans)" }}>
+    <div className="h-screen snap-y snap-mandatory overflow-y-auto bg-bg scroll-thin" style={{ fontFamily: "var(--font-sans)" }}>
       <Cover />
     </div>
   );
