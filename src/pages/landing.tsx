@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useInView, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform, type MotionValue } from "motion/react";
-import { ArrowRight, Check, Fingerprint, Minus, Plus, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, Fingerprint, Loader2, Mail, Minus, Plus, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { agentById, type Decision } from "../data/agents";
 import { PEOPLE } from "../data/people";
@@ -116,6 +116,9 @@ function Nav() {
             </button>
           ))}
         </nav>
+        <button onClick={() => scrollTo("waitlist")} className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-full bg-[#111113] px-4 text-[13.5px] font-medium text-white transition-[filter] hover:brightness-125">
+          Join the waitlist
+        </button>
       </Container>
     </header>
   );
@@ -217,6 +220,9 @@ function Hero() {
               The runtime authorization layer for AI agents. Every risky action — from Claude Code to your Stripe MCP — is checked against one intent contract, milliseconds before it runs.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
+              <button onClick={() => scrollTo("waitlist")} className="inline-flex h-11 items-center gap-2 rounded-full bg-[#111113] px-5 text-[14.5px] font-medium text-white transition-[filter] hover:brightness-125">
+                Join the waitlist <ArrowRight className="size-4" />
+              </button>
               <button onClick={() => scrollTo("decide")} className="inline-flex h-11 items-center gap-2 rounded-full border border-line bg-surface px-5 text-[14.5px] font-medium text-fg hover:border-line-strong">
                 See how it works
               </button>
@@ -763,6 +769,206 @@ function Pricing() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Waitlist                                                            */
+/* ------------------------------------------------------------------ */
+
+// Everything here is answered by /api/waitlist, which writes to a real sheet and
+// sends the confirmation mail. The position and the count are whatever the sheet
+// returns — never a number this page made up — so "you're on the list" can only
+// appear when the row actually landed.
+const WL_ROLES: { id: string; label: string }[] = [
+  { id: "security", label: "Security" },
+  { id: "platform", label: "Platform / DevOps" },
+  { id: "engineering-leadership", label: "Engineering leadership" },
+  { id: "other", label: "Something else" },
+];
+
+interface WlDone {
+  position: number;
+  duplicate: boolean;
+  email: string;
+}
+
+function Waitlist() {
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("security");
+  const [company, setCompany] = useState("");
+  const [state, setState] = useState<"idle" | "sending">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<WlDone | null>(null);
+  const [count, setCount] = useState<number | null>(null);
+
+  // The live number on the list. Absent (not zero, not invented) when the sheet
+  // cannot be read, and the counter simply does not render.
+  useEffect(() => {
+    let live = true;
+    fetch("/api/waitlist")
+      .then((r) => r.json())
+      .then((d) => live && typeof d?.count === "number" && setCount(d.count))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (state === "sending") return;
+    setError(null);
+    setState("sending");
+    try {
+      const r = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, role, company }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d?.ok) {
+        setError(typeof d?.error === "string" ? d.error : "Something went wrong. Try again in a moment.");
+        setState("idle");
+        return;
+      }
+      if (typeof d.count === "number") setCount(d.count);
+      setDone({ position: d.position, duplicate: !!d.duplicate, email });
+    } catch {
+      setError("We couldn't reach the waitlist. Check your connection and try again.");
+    }
+    setState("idle");
+  };
+
+  return (
+    <section id="waitlist" className="scroll-mt-20 py-16 sm:py-24">
+      <Container className="grid items-start gap-10 lg:grid-cols-[1fr_1.15fr]">
+        <SectionHead
+          eyebrow="Early access"
+          title="Get Wrapbox before your agents get ambitious."
+          body="We're opening access in small batches, security and platform teams first. Join the list and we'll send a workspace link with a ten-minute setup for your first agent."
+        />
+
+        <Reveal delay={0.06}>
+          <Backdrop className="p-1.5">
+            <div className="rounded-[14px] bg-surface p-6 sm:p-8">
+              <AnimatePresence mode="wait" initial={false}>
+                {done ? (
+                  /* The confirmation is a receipt, the way every other Wrapbox answer is. */
+                  <motion.div key="done" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.4, ease: [0.2, 0.7, 0.2, 1] }}>
+                    <div className="flex items-center gap-2 text-[13px] font-semibold text-allow">
+                      <ShieldCheck className="size-4" />
+                      {done.duplicate ? "You were already on the list." : "You're on the list."}
+                    </div>
+
+                    <div className="mt-4 rounded-xl border border-line bg-bg p-5">
+                      <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-fg-3">Waitlist position</div>
+                      <div className="mt-0.5 text-[40px] font-medium leading-none tracking-[-0.04em] text-fg tnum">#{done.position}</div>
+                      <div className="mt-3 flex items-start gap-1.5 border-t border-line pt-3 text-[12.5px] text-fg-2">
+                        <Mail className="mt-0.5 size-3.5 shrink-0 text-fg-3" />
+                        <span>
+                          {done.duplicate ? "Your original confirmation went to " : "Confirmation sent to "}
+                          <span className="font-mono text-[11.5px] text-fg">{done.email}</span>
+                          {done.duplicate ? "." : " — check spam if it's not there in a minute."}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="mt-4 text-[13.5px] leading-relaxed text-fg-2">
+                      We open access in batches and email from the same address, so replying gets you a person rather than a queue. Tell us which agents you run and we'll prioritise those integrations.
+                    </p>
+                    <button onClick={() => scrollTo("decide")} className="mt-4 inline-flex items-center gap-1.5 text-[14px] font-medium text-fg transition-[gap] hover:gap-2.5">
+                      Try the policy engine while you wait <ArrowRight className="size-4" />
+                    </button>
+                  </motion.div>
+                ) : (
+                  <motion.form key="form" onSubmit={submit} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
+                    <label htmlFor="wl-email" className="block text-[13px] font-medium text-fg">
+                      Work email
+                    </label>
+                    <input
+                      id="wl-email"
+                      type="email"
+                      required
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@company.com"
+                      className="mt-2 h-11 w-full rounded-xl border border-line bg-bg px-3.5 text-[14.5px] text-fg outline-none transition-colors placeholder:text-fg-3 focus:border-line-strong"
+                    />
+
+                    <div className="mt-5 text-[13px] font-medium text-fg">What do you work on?</div>
+                    <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="What do you work on?">
+                      {WL_ROLES.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={role === r.id}
+                          onClick={() => setRole(r.id)}
+                          className={cn(
+                            "relative h-8 rounded-full border px-3.5 text-[13px] font-medium transition-colors",
+                            role === r.id ? "border-transparent text-white" : "border-line bg-bg text-fg-2 hover:text-fg",
+                          )}
+                        >
+                          {role === r.id && <motion.span layoutId="wl-role" className="absolute inset-0 rounded-full bg-[#111113]" transition={{ type: "spring", duration: 0.35, bounce: 0.15 }} />}
+                          <span className="relative">{r.label}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <label htmlFor="wl-company" className="mt-5 block text-[13px] font-medium text-fg">
+                      Company <span className="font-normal text-fg-3">— optional</span>
+                    </label>
+                    <input
+                      id="wl-company"
+                      value={company}
+                      onChange={(e) => setCompany(e.target.value)}
+                      placeholder="Northwind Financial"
+                      className="mt-2 h-11 w-full rounded-xl border border-line bg-bg px-3.5 text-[14.5px] text-fg outline-none transition-colors placeholder:text-fg-3 focus:border-line-strong"
+                    />
+
+                    <button
+                      type="submit"
+                      disabled={state === "sending"}
+                      className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#111113] px-5 text-[14.5px] font-medium text-white transition-[filter,opacity] hover:brightness-125 disabled:opacity-70"
+                    >
+                      {state === "sending" ? (
+                        <>
+                          <Loader2 className="size-4 animate-spin" /> Adding you…
+                        </>
+                      ) : (
+                        <>
+                          Join the waitlist <ArrowRight className="size-4" />
+                        </>
+                      )}
+                    </button>
+
+                    <AnimatePresence initial={false}>
+                      {error && (
+                        <motion.p key="err" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-3 text-[13px] text-block">
+                          {error}
+                        </motion.p>
+                      )}
+                    </AnimatePresence>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-fg-3">
+                      {count !== null && (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="size-1.5 rounded-full bg-allow live-dot" />
+                          <span className="font-medium text-fg-2 tnum">{count.toLocaleString("en-US")}</span> {count === 1 ? "team" : "teams"} on the list
+                        </span>
+                      )}
+                      <span>No newsletter. One email when your access opens.</span>
+                    </div>
+                  </motion.form>
+                )}
+              </AnimatePresence>
+            </div>
+          </Backdrop>
+        </Reveal>
+      </Container>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* FAQ, CTA, footer                                                    */
 /* ------------------------------------------------------------------ */
 
@@ -820,6 +1026,9 @@ function FinalCta() {
                 Put your agents on a <span className="text-[#1b0f33] [text-shadow:none]">permit</span> today.
               </h2>
               <p className="mt-4 text-[17px] font-medium text-white/90">Every risky action gets a decision, a reason and a signature — before it runs.</p>
+              <button onClick={() => scrollTo("waitlist")} className="mt-8 inline-flex h-11 items-center gap-2 rounded-full bg-white px-5 text-[14.5px] font-medium text-[#111113] transition-transform hover:-translate-y-0.5">
+                Join the waitlist <ArrowRight className="size-4" />
+              </button>
             </div>
           </Backdrop>
         </motion.div>
@@ -832,7 +1041,7 @@ function Footer() {
   const cols: [string, string[]][] = [
     ["Product", ["Intent contract", "Approvals", "Evidence", "MCP gateway", "Pricing"]],
     ["Integrations", ["Claude Code", "Cursor", "Codex", "LangGraph", "Agentforce"]],
-    ["Company", ["About", "Careers", "Security", "Contact"]],
+    ["Company", ["Waitlist", "About", "Careers", "Security", "Contact"]],
     ["Legal", ["Terms", "Privacy", "DPA"]],
   ];
   return (
@@ -848,7 +1057,7 @@ function Footer() {
             <ul className="mt-3 space-y-2 text-[13px] text-fg-3">
               {items.map((x) => (
                 <li key={x}>
-                  <button onClick={() => (x === "Pricing" ? scrollTo("pricing") : undefined)} className="hover:text-fg transition-colors">
+                  <button onClick={() => (x === "Pricing" ? scrollTo("pricing") : x === "Waitlist" ? scrollTo("waitlist") : undefined)} className="hover:text-fg transition-colors">
                     {x}
                   </button>
                 </li>
@@ -920,6 +1129,7 @@ export function Landing() {
       <Numbers />
       <UseCases />
       <Pricing />
+      <Waitlist />
       <Faq />
       <FinalCta />
       <Footer />
