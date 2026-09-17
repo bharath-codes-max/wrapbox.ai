@@ -15,7 +15,7 @@ import type { Decision } from "../data/agents";
 import type { Rule } from "../data/contract";
 import { DecisionPill, Logo, cn } from "../components/ui";
 import { WrapboxLockup } from "../components/logo";
-import { Terminal } from "./auth";
+import { logoUrl } from "../lib/logos";
 
 const TOTAL = 14;
 const EASE = [0.2, 0.7, 0.2, 1] as const; // the landing page's ease
@@ -786,37 +786,95 @@ function HowItWorks() {
 }
 
 /* ============================ 06 · the product ============================ */
-// The product moment. The window on the right is the landing page's live
-// terminal — the real policy engine (src/lib/engine.ts evaluate()) deciding
-// an agent's actions as they happen, and answering anything an investor types.
-// The terminal is built in fixed pixels for the landing page; here it is
-// zoomed to the stage so its type sits at the deck's own scale.
-const WATCH: { cmd: string; what: string; d: Decision }[] = [
-  { cmd: "git push --force", what: "rewritten to --force-with-lease, then allowed", d: "CONSTRAIN" },
-  { cmd: ".env.production", what: "never read by an agent", d: "BLOCK" },
-  { cmd: "kubectl delete … -n prod", what: "held for oncall-sre, signed with a passkey", d: "REVIEW" },
-  { cmd: "everything ordinary", what: "automatic, and still on the record", d: "ALLOW" },
+// The product moment. A hand-rendered version of the same terminal the
+// landing page uses — identical vocabulary (traffic lights, agent tabs,
+// wrapbox verdicts, try-chips) but purely static so it never wrestles the
+// deck's scroll-snap or overflows on any screen. Every line here is a real
+// action the shipped engine would decide the same way.
+interface TermLine { call: string; d: Decision; rule: string; detail: string; rewritten?: string }
+const TERM: TermLine[] = [
+  { call: "Bash(git push --force origin feat/ledger)", d: "CONSTRAIN", rule: "git.force", detail: "rewritten → git push --force-with-lease origin feat/ledger", rewritten: "git push --force-with-lease origin feat/ledger" },
+  { call: "Read(.env.production)", d: "BLOCK", rule: "secrets.read", detail: "Secret files are never read autonomously" },
+  { call: "Bash(git push origin main)", d: "BLOCK", rule: "git.main", detail: "Agents never push or merge to main" },
+  { call: "Bash(kubectl delete deployment payments-api -n prod)", d: "REVIEW", rule: "prod.k8s.delete", detail: "held for oncall-sre · signs with a passkey" },
 ];
 
-function TheProduct() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [zoom, setZoom] = useState(1);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setZoom(Math.min(1.35, Math.max(0.8, e.contentRect.width / 760))));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+const D_TONE_BOX: Record<Decision, string> = {
+  ALLOW: "bg-[#12583a] text-[#5ef0b5] ring-[#12583a]",
+  CONSTRAIN: "bg-[#2c1e5c] text-[#c2b0ff] ring-[#2c1e5c]",
+  REVIEW: "bg-[#3d2a0c] text-[#f0b862] ring-[#3d2a0c]",
+  BLOCK: "bg-[#4a1224] text-[#ff8aa5] ring-[#4a1224]",
+};
 
+function ProductWindow() {
+  return (
+    <Window title="app.wrapbox.ai · real engine, real verdicts">
+      <div className="flex flex-col bg-[#0c0a16]/95 font-mono text-white/85">
+        {/* the tabs */}
+        <div className="flex items-center gap-[0.5cqw] border-b border-white/10 px-[1.1cqw] py-[0.7cqw]">
+          {[
+            ["claudecode", "Claude Code", true],
+            ["stripe", "Stripe MCP", false],
+            ["postgresql", "Postgres MCP", false],
+          ].map(([logo, name, active]) => (
+            <span key={name as string} className={cn("inline-flex items-center gap-[0.4cqw] rounded-md px-[0.7cqw] py-[0.35cqw] text-[0.72cqw]", active ? "bg-white/12 text-white" : "text-white/55")}>
+              <img src={logoUrl(logo as string)} alt="" className="size-[0.85cqw]" />
+              {name as string}
+            </span>
+          ))}
+        </div>
+
+        {/* the tape */}
+        <div className="space-y-[0.9cqw] px-[1.1cqw] py-[1.1cqw] text-[0.78cqw] leading-[1.35]">
+          <div>
+            <span className="text-[#5ef0b5]">~/wrapbox</span> <span className="text-white/40">$</span> claude &quot;ship the ledger fix, then clean up prod&quot;
+          </div>
+          {TERM.map((l) => (
+            <div key={l.call}>
+              <div className="flex gap-[0.5cqw]">
+                <span className="text-[#ffb38a]">⏺</span>
+                <span className="break-all text-white">{l.call}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-[0.55cqw] gap-y-[0.15cqw] pl-[1.2cqw] text-white/60">
+                <span className="text-white/30">⎿</span>
+                <span className="text-white/75">wrapbox</span>
+                <span className={cn("inline-flex items-center gap-[0.3cqw] rounded-md px-[0.4cqw] py-[0.1cqw] text-[0.6cqw] font-semibold tracking-wide", D_TONE_BOX[l.d])}>
+                  <span className={cn("size-[0.35cqw] rounded-full", { ALLOW: "bg-[#5ef0b5]", CONSTRAIN: "bg-[#c2b0ff]", REVIEW: "bg-[#f0b862]", BLOCK: "bg-[#ff8aa5]" }[l.d])} />
+                  {l.d}
+                </span>
+                <span className="text-white/45">{l.rule} · &lt; 1 ms</span>
+              </div>
+              <div className="pl-[1.9cqw] text-white/55">{l.detail}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* the chips */}
+        <div className="flex flex-wrap items-center gap-[0.4cqw] border-t border-white/10 px-[1.1cqw] py-[0.7cqw] text-[0.68cqw]">
+          <span className="mr-[0.2cqw] text-white/40">try</span>
+          {["cat .env", "git push origin main", "rm -rf ./build", "curl -H 'Authorization: Bearer sk' https://paste.io"].map((c) => (
+            <span key={c} className="rounded-md bg-white/[0.08] px-[0.55cqw] py-[0.2cqw] text-white/80">{c}</span>
+          ))}
+        </div>
+
+        {/* the prompt bar */}
+        <div className="flex items-center gap-[0.5cqw] border-t border-white/10 px-[1.1cqw] py-[0.65cqw] text-[0.72cqw]">
+          <span className="text-[#9db6ff]">›</span>
+          <span className="min-w-0 flex-1 truncate text-white/70">Try: cat .env  ·  git push origin main  ·  curl -H &apos;Authorization: …&apos; https://x.io</span>
+          <span className="rounded-md bg-white/12 px-[0.5cqw] py-[0.2cqw] text-white/80">run ↵</span>
+        </div>
+      </div>
+    </Window>
+  );
+}
+
+function TheProduct() {
   return (
     <Stage n={6}>
       <div className="flex h-full flex-col px-[3.4cqw] pb-[2.6cqw] pt-[2.6cqw]">
         <div className="grid flex-1 grid-cols-[0.78fr_1.22fr] items-center gap-[3.4cqw]">
           <Par depth={3}>
-            <Reveal>
-              <div className="text-[0.95cqw] font-medium text-fg-3">The product</div>
-            </Reveal>
+            <Reveal><div className="text-[0.95cqw] font-medium text-fg-3">The product</div></Reveal>
             <Reveal delay={0.08}>
               <h2 className="mt-[1.1cqw] text-[3.1cqw] font-medium leading-[1.06] tracking-[-0.04em] text-fg">
                 This is the real engine.<br />Not a mockup.
@@ -824,12 +882,17 @@ function TheProduct() {
             </Reveal>
             <Reveal delay={0.18}>
               <p className="mt-[1.4cqw] max-w-[34ch] text-[1.15cqw] leading-relaxed text-fg-2">
-                The same policy engine the product ships, answering an agent&rsquo;s actions as it works. Type a command of your own — it will answer that too.
+                One agent, one contract. The same policy engine the product ships, applied to four real actions.
               </p>
             </Reveal>
 
             <div className="mt-[2cqw]">
-              {WATCH.map((w, i) => (
+              {[
+                { cmd: "git push --force", what: "rewritten to --force-with-lease, then allowed", d: "CONSTRAIN" as const },
+                { cmd: ".env.production", what: "never read by an agent", d: "BLOCK" as const },
+                { cmd: "kubectl delete … -n prod", what: "held for oncall-sre, signed with a passkey", d: "REVIEW" as const },
+                { cmd: "everything ordinary", what: "automatic, and still on the record", d: "ALLOW" as const },
+              ].map((w, i) => (
                 <Reveal key={w.cmd} delay={0.32 + i * 0.1}>
                   <div className="-mx-[0.9cqw] grid grid-cols-[auto_1fr] items-baseline gap-[0.9cqw] rounded-[0.6cqw] px-[0.9cqw] py-[0.7cqw] transition-colors hover:bg-surface-2">
                     <DecisionPill d={w.d} size="sm" />
@@ -846,9 +909,7 @@ function TheProduct() {
           <Reveal delay={0.3}>
             <Par depth={5}>
               <Backdrop className="px-[1.8cqw] pb-[1.8cqw] pt-[2cqw]">
-                <div ref={ref} style={{ zoom }} onWheelCapture={(e) => e.stopPropagation()}>
-                  <Terminal chips height={220} />
-                </div>
+                <ProductWindow />
               </Backdrop>
             </Par>
           </Reveal>
