@@ -245,6 +245,12 @@ function step_(n, title, body, line, ink, muted) {
  * accident; just run it again to continue the rest.
  * ══════════════════════════════════════════════════════════════════════════ */
 
+var SITE = 'https://wrapbox-prototype.vercel.app';
+// Stable, public image URLs (public/email/ in the repo — never hashed by the build,
+// so a sent email keeps working after every deploy).
+var LOGO_URL = SITE + '/email/wordmark.png';
+var HERO_URL = SITE + '/email/overview.jpg';
+
 var NEWSLETTER_VERSION = 'v1';     // bump this string for every new edition you send
 var MAX_PER_RUN = 450;             // headroom under the 1,500/day Workspace quota
 
@@ -273,7 +279,9 @@ var NEWSLETTER = {
     },
   ],
   ctaLabel: 'See the policy engine in action',
-  ctaUrl: 'https://wrapbox-prototype.vercel.app/#/landing',
+  ctaUrl: SITE + '/#/landing',
+  heroAlt: 'The Wrapbox control plane: 18,442 agent actions checked, 684 stopped before they ran.',
+  heroCaption: 'The control plane — every agent action, every decision, live.',
 };
 
 // Real tiers from the pricing page — kept in one place so the newsletter
@@ -351,10 +359,20 @@ function newsletterHtml_() {
   '<div style="margin:0;padding:32px 16px;background:' + paper + ';font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Helvetica,Arial,sans-serif;">' +
     '<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid ' + line + ';border-radius:16px;overflow:hidden;">' +
 
-      '<div style="background:' + ink + ';padding:22px 28px;">' +
-        '<div style="color:#ffffff;font-size:17px;font-weight:600;letter-spacing:-0.02em;">' + BRAND + '</div>' +
-        '<div style="color:rgba(255,255,255,0.62);font-size:12.5px;margin-top:3px;">' + NEWSLETTER.kicker + '</div>' +
-      '</div>' +
+      // Brand bar: the real wordmark, on white so the navy mark reads properly.
+      // alt text carries the brand for the clients that block images by default.
+      '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;border-bottom:1px solid ' + line + ';"><tr>' +
+        '<td style="padding:18px 28px;">' +
+          '<img src="' + LOGO_URL + '" width="132" alt="' + BRAND + '" style="display:block;width:132px;height:auto;border:0;" />' +
+        '</td>' +
+        '<td style="padding:18px 28px;text-align:right;font-size:12px;color:' + faint + ';white-space:nowrap;">' + NEWSLETTER.kicker + '</td>' +
+      '</tr></table>' +
+
+      // The product itself, before a word of copy.
+      '<a href="' + NEWSLETTER.ctaUrl + '" style="display:block;text-decoration:none;">' +
+        '<img src="' + HERO_URL + '" width="560" alt="' + NEWSLETTER.heroAlt + '" style="display:block;width:100%;max-width:560px;height:auto;border:0;" />' +
+      '</a>' +
+      '<div style="padding:10px 28px 0;font-size:11.5px;color:' + faint + ';border-bottom:1px solid ' + line + ';padding-bottom:16px;">' + NEWSLETTER.heroCaption + '</div>' +
 
       '<div style="padding:28px 28px 0;">' +
         '<div style="font-size:22px;font-weight:600;color:' + ink + ';letter-spacing:-0.02em;line-height:1.3;">' + NEWSLETTER.headline + '</div>' +
