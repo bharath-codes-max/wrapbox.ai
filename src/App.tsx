@@ -2,7 +2,7 @@ import { MotionConfig, motion } from "motion/react";
 import { useEffect } from "react";
 import { Shell } from "./components/shell";
 import { useRoute } from "./lib/router";
-import { WORKSPACES, homePath, startLive, useStore } from "./lib/store";
+import { WORKSPACES, homePath, startLive, switchWorkspace, useStore } from "./lib/store";
 import { startCpSync } from "./lib/cp-sync";
 import { cpConfigComplete, useCpConfig } from "./lib/cp-config";
 import { AgentDetail, AgentsPage } from "./pages/agents";
@@ -27,6 +27,15 @@ import { AuthPage } from "./pages/auth";
 import { Landing } from "./pages/landing";
 import { LiveDemo } from "./pages/live";
 import { Pitch } from "./pages/pitch";
+
+function LiveEmbed() {
+  useEffect(() => { switchWorkspace("live"); }, []);
+  return (
+    <MotionConfig reducedMotion="user">
+      <LiveDemo />
+    </MotionConfig>
+  );
+}
 import { useAccount } from "./lib/auth";
 import { go } from "./lib/router";
 
@@ -51,6 +60,9 @@ export default function App() {
   const landing = seg[0] === "landing";
   // The investor pitch is public, like the landing page: no account, no shell.
   const pitch = seg[0] === "pitch";
+  // A public route that forces the live workspace and renders just the demo
+  // for embedding in an iframe from the pitch deck.
+  const liveEmbed = seg[0] === "live-embed";
 
   const meta = WORKSPACES[workspace];
   const labsRoute = seg[0] === "playground" || seg[0] === "flows";
@@ -58,12 +70,12 @@ export default function App() {
   // Onboarding is kept — in fabric it's the Enrollment wizard, in v1 the existing SetupLayout wizard.
   const v1Route = ["start", "agents", "team"].includes(seg[0] ?? "");
   useEffect(() => {
-    if (!account && !authRoute && !landing && !pitch) go("/landing");
+    if (!account && !authRoute && !landing && !pitch && !liveEmbed) go("/landing");
     else if (account && authRoute) go(homePath());
     else if (labsRoute && !meta.labs) go("/");
     else if (v1Route && meta.fabric) go("/");
-    else if (account && workspace === "v2" && !cpConfigComplete(cpCfg) && seg[0] !== "settings" && !authRoute && !landing && !pitch) go("/settings");
-  }, [account, authRoute, landing, pitch, labsRoute, v1Route, meta, workspace, cpCfg, path]);
+    else if (account && workspace === "v2" && !cpConfigComplete(cpCfg) && seg[0] !== "settings" && !authRoute && !landing && !pitch && !liveEmbed) go("/settings");
+  }, [account, authRoute, landing, pitch, liveEmbed, labsRoute, v1Route, meta, workspace, cpCfg, path]);
 
   if (pitch)
     return (
@@ -71,6 +83,8 @@ export default function App() {
         <Pitch />
       </MotionConfig>
     );
+
+  if (liveEmbed) return <LiveEmbed />;
 
   if (landing || (!account && !authRoute))
     return (
