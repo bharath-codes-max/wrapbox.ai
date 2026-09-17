@@ -249,9 +249,14 @@ var SITE = 'https://wrapbox-prototype.vercel.app';
 // Stable, public image URLs (public/email/ in the repo — never hashed by the build,
 // so a sent email keeps working after every deploy).
 var LOGO_URL = SITE + '/email/wordmark.png';
-var HERO_URL = SITE + '/email/overview.jpg';
+var HERO_URL = SITE + '/email/terminal.jpg';
+// The prism gradient — the same one .prism-swatch draws across the product
+// (the Deploy card's hairline, the "Most popular" badge, the Get-started
+// hero). Reused here so the email carries the one visual signature that
+// actually identifies Wrapbox, instead of a flat navy template band.
+var PRISM = 'linear-gradient(120deg, #ff6a3d, #ff9fcf 50%, #9a82f7)';
 
-var NEWSLETTER_VERSION = 'v1';     // bump this string for every new edition you send
+var NEWSLETTER_VERSION = 'v2';     // bump this string for every new edition you send
 var MAX_PER_RUN = 450;             // headroom under the 1,500/day Workspace quota
 
 // ── Edit this block for each edition. Plain text and simple arrays only —
@@ -280,8 +285,17 @@ var NEWSLETTER = {
   ],
   ctaLabel: 'See the policy engine in action',
   ctaUrl: SITE + '/#/landing',
-  heroAlt: 'The Wrapbox control plane: 18,442 agent actions checked, 684 stopped before they ran.',
-  heroCaption: 'The control plane — every agent action, every decision, live.',
+  heroAlt: 'Claude Code tries four things in a row: a force-push gets rewritten, a secrets read and a push to main are blocked, a production delete is held for review.',
+  heroCaption: 'One agent, four attempts, four different outcomes — the real engine, not a mockup.',
+};
+
+// Company details for the legal footer every commercial bulk email needs
+// (CAN-SPAM requires a physical postal address on marketing mail).
+var COMPANY = {
+  legalName: 'Wrapbox Inc.',
+  addressLine: '8 The Green, Ste B',
+  cityLine: 'Dover, Delaware 19901',
+  phone: '+1 (302) 506-9767',
 };
 
 // Real tiers from the pricing page — kept in one place so the newsletter
@@ -347,34 +361,40 @@ function newsletterHtml_() {
 
   var tiersHtml = TIERS.map(function (t) {
     return '' +
-    '<td style="width:25%;vertical-align:top;padding:14px 10px;border:1px solid ' + line + ';border-radius:10px;">' +
-      '<div style="font-size:13px;font-weight:600;color:' + ink + ';">' + t.name + '</div>' +
-      '<div style="font-size:10.5px;color:' + faint + ';margin-top:2px;">' + t.unit + '</div>' +
-      '<div style="font-size:11.5px;line-height:1.5;color:' + muted + ';margin-top:6px;">' + t.blurb + '</div>' +
-    '</td>' +
-    '<td style="width:8px;"></td>';
+    '<td style="width:25%;vertical-align:top;padding:0 4px;">' +
+      '<div style="border:1px solid ' + line + ';border-top:3px solid transparent;border-image:' + PRISM + ';border-image-slice:1;border-radius:10px;padding:13px 10px;">' +
+        '<div style="font-size:13px;font-weight:600;color:' + ink + ';">' + t.name + '</div>' +
+        '<div style="font-size:10.5px;color:' + faint + ';margin-top:2px;">' + t.unit + '</div>' +
+        '<div style="font-size:11.5px;line-height:1.5;color:' + muted + ';margin-top:6px;">' + t.blurb + '</div>' +
+      '</div>' +
+    '</td>';
   }).join('');
 
   return '' +
   '<div style="margin:0;padding:32px 16px;background:' + paper + ';font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Helvetica,Arial,sans-serif;">' +
     '<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid ' + line + ';border-radius:16px;overflow:hidden;">' +
 
+      // The prism strip — the product's one recurring signature moment.
+      '<div style="height:4px;background:' + PRISM + ';"></div>' +
+
       // Brand bar: the real wordmark, on white so the navy mark reads properly.
-      // alt text carries the brand for the clients that block images by default.
-      '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;border-bottom:1px solid ' + line + ';"><tr>' +
-        '<td style="padding:18px 28px;">' +
-          '<img src="' + LOGO_URL + '" width="132" alt="' + BRAND + '" style="display:block;width:132px;height:auto;border:0;" />' +
+      '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>' +
+        '<td style="padding:20px 28px 4px;">' +
+          '<img src="' + LOGO_URL + '" width="128" alt="' + BRAND + '" style="display:block;width:128px;height:auto;border:0;" />' +
         '</td>' +
-        '<td style="padding:18px 28px;text-align:right;font-size:12px;color:' + faint + ';white-space:nowrap;">' + NEWSLETTER.kicker + '</td>' +
+        '<td style="padding:20px 28px 4px;text-align:right;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:' + faint + ';white-space:nowrap;">' + NEWSLETTER.kicker + '</td>' +
       '</tr></table>' +
 
-      // The product itself, before a word of copy.
-      '<a href="' + NEWSLETTER.ctaUrl + '" style="display:block;text-decoration:none;">' +
-        '<img src="' + HERO_URL + '" width="560" alt="' + NEWSLETTER.heroAlt + '" style="display:block;width:100%;max-width:560px;height:auto;border:0;" />' +
-      '</a>' +
-      '<div style="padding:10px 28px 0;font-size:11.5px;color:' + faint + ';border-bottom:1px solid ' + line + ';padding-bottom:16px;">' + NEWSLETTER.heroCaption + '</div>' +
+      // The product itself, contained with real margins rather than bled
+      // edge-to-edge — framed like the product's own window screenshots.
+      '<div style="padding:14px 28px 4px;">' +
+        '<a href="' + NEWSLETTER.ctaUrl + '" style="display:block;text-decoration:none;border-radius:12px;overflow:hidden;border:1px solid ' + line + ';">' +
+          '<img src="' + HERO_URL + '" width="504" alt="' + NEWSLETTER.heroAlt + '" style="display:block;width:100%;max-width:504px;height:auto;border:0;" />' +
+        '</a>' +
+        '<div style="margin-top:9px;font-size:11.5px;line-height:1.5;color:' + faint + ';">' + NEWSLETTER.heroCaption + '</div>' +
+      '</div>' +
 
-      '<div style="padding:28px 28px 0;">' +
+      '<div style="padding:24px 28px 0;">' +
         '<div style="font-size:22px;font-weight:600;color:' + ink + ';letter-spacing:-0.02em;line-height:1.3;">' + NEWSLETTER.headline + '</div>' +
         '<p style="margin:14px 0 0;font-size:14.5px;line-height:1.65;color:' + muted + ';">' + NEWSLETTER.intro + '</p>' +
       '</div>' +
@@ -385,7 +405,7 @@ function newsletterHtml_() {
       '</div>' +
 
       '<div style="padding:8px 28px 4px;">' +
-        '<a href="' + NEWSLETTER.ctaUrl + '" style="display:inline-block;background:' + ink + ';color:#ffffff;text-decoration:none;font-size:13.5px;font-weight:600;padding:11px 20px;border-radius:999px;">' + NEWSLETTER.ctaLabel + ' →</a>' +
+        '<a href="' + NEWSLETTER.ctaUrl + '" style="display:inline-block;background:' + PRISM + ';color:#ffffff;text-decoration:none;font-size:13.5px;font-weight:700;padding:12px 22px;border-radius:999px;box-shadow:0 8px 20px -8px rgba(154,130,247,0.55);">' + NEWSLETTER.ctaLabel + ' →</a>' +
       '</div>' +
 
       '<div style="padding:26px 28px 8px;">' +
@@ -395,9 +415,18 @@ function newsletterHtml_() {
         '</div>' +
       '</div>' +
 
-      '<div style="padding:20px 28px 26px;">' +
-        '<div style="font-size:12px;line-height:1.6;color:' + faint + ';">' +
-          'You’re getting this because you joined the ' + BRAND + ' waitlist. Reply and ask to be removed at any time — a person reads this inbox.' +
+      '<div style="padding:26px 28px 4px;">' +
+        '<div style="font-size:13.5px;line-height:1.6;color:' + ink + ';">' +
+          'Warm regards,<br />The ' + BRAND + ' Team' +
+        '</div>' +
+      '</div>' +
+
+      // The legal footer: a physical address and the unsubscribe line are
+      // required on commercial bulk email (CAN-SPAM), not decoration.
+      '<div style="padding:22px 28px 26px;">' +
+        '<div style="border-top:1px solid ' + line + ';padding-top:16px;font-size:11.5px;line-height:1.65;color:' + faint + ';">' +
+          '<div>' + COMPANY.legalName + ' · ' + COMPANY.addressLine + ' · ' + COMPANY.cityLine + ' · ' + COMPANY.phone + '</div>' +
+          '<div style="margin-top:4px;">© ' + new Date().getFullYear() + ' ' + COMPANY.legalName.replace(/\.$/, '') + '. All rights reserved. You’re getting this because you joined the ' + BRAND + ' waitlist — reply and ask to be removed at any time.</div>' +
         '</div>' +
       '</div>' +
 
