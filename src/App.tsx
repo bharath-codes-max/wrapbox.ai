@@ -26,6 +26,7 @@ import { SettingsPage } from "./pages/settings";
 import { AuthPage } from "./pages/auth";
 import { Landing } from "./pages/landing";
 import { LiveDemo } from "./pages/live";
+import { Pitch } from "./pages/pitch";
 import { useAccount } from "./lib/auth";
 import { go } from "./lib/router";
 
@@ -48,6 +49,8 @@ export default function App() {
   const seg = path.split("/").filter(Boolean);
   const authRoute = seg[0] === "login" || seg[0] === "signup";
   const landing = seg[0] === "landing";
+  // The investor pitch is public, like the landing page: no account, no shell.
+  const pitch = seg[0] === "pitch";
 
   const meta = WORKSPACES[workspace];
   const labsRoute = seg[0] === "playground" || seg[0] === "flows";
@@ -55,12 +58,19 @@ export default function App() {
   // Onboarding is kept — in fabric it's the Enrollment wizard, in v1 the existing SetupLayout wizard.
   const v1Route = ["start", "agents", "team"].includes(seg[0] ?? "");
   useEffect(() => {
-    if (!account && !authRoute && !landing) go("/landing");
+    if (!account && !authRoute && !landing && !pitch) go("/landing");
     else if (account && authRoute) go(homePath());
     else if (labsRoute && !meta.labs) go("/");
     else if (v1Route && meta.fabric) go("/");
-    else if (account && workspace === "v2" && !cpConfigComplete(cpCfg) && seg[0] !== "settings" && !authRoute && !landing) go("/settings");
-  }, [account, authRoute, landing, labsRoute, v1Route, meta, workspace, cpCfg, path]);
+    else if (account && workspace === "v2" && !cpConfigComplete(cpCfg) && seg[0] !== "settings" && !authRoute && !landing && !pitch) go("/settings");
+  }, [account, authRoute, landing, pitch, labsRoute, v1Route, meta, workspace, cpCfg, path]);
+
+  if (pitch)
+    return (
+      <MotionConfig reducedMotion="user">
+        <Pitch />
+      </MotionConfig>
+    );
 
   if (landing || (!account && !authRoute))
     return (
