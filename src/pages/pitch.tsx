@@ -9,7 +9,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowRight } from "lucide-react";
+import { ArrowDown, ArrowRight, Check } from "lucide-react";
 import { INTENT_CONTRACT, SURFACES, activeRules, runAction, type RunResult, type ScenarioAction, type Surface } from "../data/playground";
 import type { Decision } from "../data/agents";
 import type { Rule } from "../data/contract";
@@ -858,6 +858,462 @@ function TheProduct() {
   );
 }
 
+/* ============================ 07 · why different ============================ */
+// Wrapbox's category, said plainly. Left: the six neighbours everyone knows,
+// each with the one sentence about the thing it does. Right: the one that says
+// what Wrapbox does — and the four properties nobody else combines. Typography
+// only, no icons, no colour outside the semantic pills.
+interface Row { name: string; what: string; miss: string }
+const NEIGHBOURS: Row[] = [
+  { name: "Prompt guardrails", what: "Screens the model's text.", miss: "Doesn't see the action." },
+  { name: "Agent frameworks", what: "Lists tools an agent can call.", miss: "Static; no per-action check." },
+  { name: "MCP by itself", what: "Delivers tools to agents.", miss: "No authorization layer." },
+  { name: "IAM / PAM", what: "Governs the account, its role, its session.", miss: "Doesn't see the SQL or the shell." },
+  { name: "CSPM / DLP", what: "Watches cloud posture and file exfiltration.", miss: "Reads the aftermath, not the ask." },
+  { name: "SIEM", what: "Collects the log.", miss: "No verdict, no receipt, no signed permit." },
+];
+const OURS = [
+  "Decides in milliseconds, per action, on the effect — not the text.",
+  "One contract covers every agent and every surface.",
+  "Signs the answer: an ECDSA permit bound to the exact arguments.",
+  "Every decision is hash-chained into the evidence, replayable later.",
+];
+
+function WhyDifferent() {
+  return (
+    <Stage n={7}>
+      <div className="flex h-full flex-col px-[3.4cqw] pb-[2.6cqw] pt-[2.6cqw]">
+        <div className="grid grid-cols-[1.15fr_0.85fr] items-end gap-[3cqw]">
+          <div>
+            <Reveal><div className="text-[0.95cqw] font-medium text-fg-3">Why we&rsquo;re different</div></Reveal>
+            <Reveal delay={0.08}>
+              <h2 className="mt-[0.9cqw] text-[2.9cqw] font-medium leading-[1.06] tracking-[-0.04em] text-fg">
+                Guardrails judge text.<br />Wrapbox authorises actions.
+              </h2>
+            </Reveal>
+          </div>
+          <Reveal delay={0.18}>
+            <p className="max-w-[36ch] text-[1.1cqw] leading-relaxed text-fg-2">
+              Every existing category watches one part of the agent&rsquo;s day. None of them answer, for one specific action, whether the company allows it — and prove it later.
+            </p>
+          </Reveal>
+        </div>
+
+        <div className="mt-[1.6cqw] grid flex-1 grid-cols-[1.15fr_1fr] gap-[2.4cqw]">
+          <Par depth={3}>
+            <div className="grid grid-cols-[10cqw_1fr_1fr] items-baseline gap-x-[1.2cqw] border-b border-line pb-[0.55cqw] text-[0.72cqw] font-mono uppercase tracking-[0.12em] text-fg-3">
+              <span>Category</span><span>What it does</span><span>What it misses</span>
+            </div>
+            {NEIGHBOURS.map((r, i) => (
+              <Reveal key={r.name} delay={0.28 + i * 0.06}>
+                <div className="grid grid-cols-[10cqw_1fr_1fr] items-baseline gap-x-[1.2cqw] border-b border-line/70 py-[0.75cqw] text-[0.98cqw] leading-snug">
+                  <span className="font-medium text-fg">{r.name}</span>
+                  <span className="text-fg-2">{r.what}</span>
+                  <span className="text-fg-3">{r.miss}</span>
+                </div>
+              </Reveal>
+            ))}
+          </Par>
+
+          <Par depth={5}>
+            <Reveal delay={0.22}>
+              <div className="rounded-[0.9cqw] bg-fg px-[1.7cqw] py-[1.5cqw] text-white">
+                <div className="font-mono text-[0.72cqw] uppercase tracking-[0.14em] text-white/55">Wrapbox</div>
+                <div className="mt-[0.5cqw] text-[1.7cqw] font-medium tracking-[-0.02em]">Runtime authorization</div>
+                <ul className="mt-[1cqw] space-y-[0.7cqw]">
+                  {OURS.map((line, i) => (
+                    <li key={i} className="grid grid-cols-[auto_1fr] items-baseline gap-[0.7cqw] text-[1cqw] leading-snug text-white/85">
+                      <Check className="size-[0.9cqw] shrink-0 text-white/70" strokeWidth={2.2} />
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Reveal>
+          </Par>
+        </div>
+      </div>
+    </Stage>
+  );
+}
+
+/* ============================ 08 · why now ============================ */
+const NOW: { year: string; label: string; note: string }[] = [
+  { year: "Nov 2024", label: "Anthropic ships MCP — open protocol for agent tools.", note: "Reference: modelcontextprotocol.io" },
+  { year: "Mar 2025", label: "OpenAI adopts MCP; ChatGPT desktop ships MCP.", note: "OpenAI" },
+  { year: "Jul 2025", label: "Replit incident — SaaStr's DB deleted by an agent.", note: "Public post-mortem" },
+  { year: "Nov 2025", label: "MCP moves under the Linux Foundation; Google, Microsoft, AWS ship support.", note: "modelcontextprotocol.io" },
+  { year: "Apr 2026", label: "Cursor agent wipes PocketOS in 9 s. Cross-vendor risk becomes obvious.", note: "Zenity report" },
+  { year: "Now", label: "97M MCP SDK downloads per month, up from 100K at launch.", note: "MCP project · Mar 2026" },
+];
+function WhyNow() {
+  return (
+    <Stage n={8}>
+      <div className="flex h-full flex-col px-[3.4cqw] pb-[2.6cqw] pt-[2.6cqw]">
+        <div className="grid grid-cols-[1.15fr_0.85fr] items-end gap-[3cqw]">
+          <div>
+            <Reveal><div className="text-[0.95cqw] font-medium text-fg-3">Why now</div></Reveal>
+            <Reveal delay={0.08}>
+              <h2 className="mt-[0.9cqw] text-[2.9cqw] font-medium leading-[1.06] tracking-[-0.04em] text-fg">
+                The standard landed. The incidents landed with it.
+              </h2>
+            </Reveal>
+          </div>
+          <Reveal delay={0.18}>
+            <p className="max-w-[36ch] text-[1.1cqw] leading-relaxed text-fg-2">
+              The plumbing that hands agents their tools became a shared standard in eighteen months. The incidents that follow that plumbing landed at the same speed. Runtime authorization has to exist now, and once.
+            </p>
+          </Reveal>
+        </div>
+
+        <div className="mt-[1.6cqw] flex-1">
+          {NOW.map((n, i) => (
+            <Reveal key={n.year + n.label} delay={0.28 + i * 0.08}>
+              <div className="grid grid-cols-[8cqw_1fr_auto] items-baseline gap-[1.2cqw] border-b border-line/70 py-[0.9cqw]">
+                <span className="font-mono text-[0.9cqw] text-fg-3">{n.year}</span>
+                <span className="text-[1.15cqw] font-medium leading-snug tracking-[-0.01em] text-fg">{n.label}</span>
+                <span className="text-[0.82cqw] text-fg-3">{n.note}</span>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </Stage>
+  );
+}
+
+/* ============================ 09 · market ============================ */
+// Bottom-up rather than a TAM circle. Real per-person prices from the landing
+// page ($30 / $59) and public head counts, so the number is derivable, not typed.
+function Market() {
+  const ppl = 30_000_000; // ~30M developers worldwide, Gartner / Evans Data ranges
+  const teamPct = 0.60, bizPct = 0.10;
+  const ann = 12;
+  const rev = Math.round((ppl * teamPct * 30 + ppl * bizPct * 59) * ann);
+  const fmt = (n: number) => "$" + (n / 1e9).toFixed(0) + "B";
+  return (
+    <Stage n={9}>
+      <div className="flex h-full flex-col px-[3.4cqw] pb-[2.6cqw] pt-[2.6cqw]">
+        <div className="grid grid-cols-[1.15fr_0.85fr] items-end gap-[3cqw]">
+          <div>
+            <Reveal><div className="text-[0.95cqw] font-medium text-fg-3">Market</div></Reveal>
+            <Reveal delay={0.08}>
+              <h2 className="mt-[0.9cqw] text-[2.9cqw] font-medium leading-[1.06] tracking-[-0.04em] text-fg">
+                Priced per person, so the market is every employee who runs an agent.
+              </h2>
+            </Reveal>
+          </div>
+          <Reveal delay={0.18}>
+            <p className="max-w-[36ch] text-[1.1cqw] leading-relaxed text-fg-2">
+              We do not need to invent a TAM. Take the number of people whose agents Wrapbox governs, multiply by the price they pay. The site prices $30 and $59 per person / month; the bottom-up ceiling falls out.
+            </p>
+          </Reveal>
+        </div>
+
+        <Par depth={3} className="mt-[1.8cqw] flex-1">
+          <div className="grid grid-cols-4 gap-[1.2cqw]">
+            {[
+              ["30M", "Developers worldwide", "Gartner / Evans Data, 2026"],
+              ["20M", "Use an AI coding assistant daily", "AI coding stats, 2026"],
+              ["86%", "Of orgs run coding agents in production", "Agentic coding in production, Q1 2026"],
+              [fmt(rev), "Bottom-up annual ceiling · $30 & $59 per person / mo · 60% + 10% mix", "Derived, not surveyed"],
+            ].map(([v, l, s2], i) => (
+              <Reveal key={String(v)} delay={0.3 + i * 0.09}>
+                <div className="rounded-[0.9cqw] bg-surface-2 p-[1.4cqw] transition-colors hover:bg-surface-3">
+                  <div className="text-[3.2cqw] font-medium leading-none tracking-[-0.04em] text-fg tnum">{v}</div>
+                  <div className="mt-[0.7cqw] text-[0.95cqw] leading-snug text-fg-2">{l}</div>
+                  <div className="mt-[0.35cqw] text-[0.75cqw] text-fg-3">{s2}</div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          <Reveal delay={0.75}>
+            <div className="mt-[1.6cqw] rounded-[0.7cqw] bg-surface-2 px-[1.5cqw] py-[1cqw] text-[0.95cqw] leading-relaxed text-fg-2">
+              <span className="font-medium text-fg">The comparable spend</span> — endpoint security ($16B), PAM ($3.4B) and SIEM ($6.3B) already sum to more than $25B a year for the same buyer. Agents are the next line item.
+            </div>
+          </Reveal>
+        </Par>
+      </div>
+    </Stage>
+  );
+}
+
+/* ============================ 10 · business & GTM ============================ */
+const PLANS_MIN: { name: string; price: string; sub: string; what: string }[] = [
+  { name: "Starter", price: "$0", sub: "free forever", what: "One-person teams. Local agents." },
+  { name: "Team", price: "$30", sub: "per person / month", what: "Land with the security or platform team." },
+  { name: "Business", price: "$59", sub: "per person / month", what: "The company standard. Every agent." },
+  { name: "Enterprise", price: "—", sub: "annual contract", what: "Private cloud, own keys, residency." },
+];
+function BusinessGTM() {
+  return (
+    <Stage n={10}>
+      <div className="flex h-full flex-col px-[3.4cqw] pb-[2.6cqw] pt-[2.6cqw]">
+        <div className="grid grid-cols-[1.15fr_0.85fr] items-end gap-[3cqw]">
+          <div>
+            <Reveal><div className="text-[0.95cqw] font-medium text-fg-3">Business model &amp; GTM</div></Reveal>
+            <Reveal delay={0.08}>
+              <h2 className="mt-[0.9cqw] text-[2.9cqw] font-medium leading-[1.06] tracking-[-0.04em] text-fg">
+                Land with the security team.<br />Expand with every agent.
+              </h2>
+            </Reveal>
+          </div>
+          <Reveal delay={0.18}>
+            <p className="max-w-[36ch] text-[1.1cqw] leading-relaxed text-fg-2">
+              The buyer is a CISO or platform lead. The wedge is the developer already running Claude Code or Cursor. Distribution comes free: the hooks the agent vendors published, and MDM.
+            </p>
+          </Reveal>
+        </div>
+
+        <div className="mt-[1.8cqw] grid grid-cols-4 gap-[1cqw]">
+          {PLANS_MIN.map((p, i) => (
+            <Reveal key={p.name} delay={0.28 + i * 0.08}>
+              <div className="rounded-[0.9cqw] bg-surface-2 p-[1.4cqw] transition-colors hover:bg-surface-3">
+                <div className="text-[1cqw] font-medium text-fg">{p.name}</div>
+                <div className="mt-[0.6cqw] flex items-baseline gap-[0.5cqw]">
+                  <span className="text-[2.4cqw] font-medium leading-none tracking-[-0.03em] text-fg tnum">{p.price}</span>
+                  <span className="text-[0.78cqw] text-fg-3">{p.sub}</span>
+                </div>
+                <p className="mt-[0.9cqw] text-[0.9cqw] leading-snug text-fg-2">{p.what}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+
+        <div className="mt-[1.6cqw] grid flex-1 grid-cols-3 gap-[2cqw]">
+          {[
+            ["Land", "A developer installs the Claude Code / Cursor hook in a minute. Security sees the first receipts the same day."],
+            ["Expand", "MDM pushes the runtime daemon to the whole fleet in one click. The gateway lights up every agent, everywhere."],
+            ["Own", "Company-wide contract, evidence chain and passkey approvals — the security team files it under runtime authorization, forever."],
+          ].map(([t, b], i) => (
+            <Reveal key={t} delay={0.6 + i * 0.09}>
+              <div className="font-mono text-[0.72cqw] uppercase tracking-[0.14em] text-fg-3">{i + 1} · {t}</div>
+              <div className="mt-[0.6cqw] text-[1cqw] leading-relaxed text-fg-2">{b}</div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </Stage>
+  );
+}
+
+/* ============================ 11 · what exists today ============================ */
+const BUILT: { k: string; v: string }[] = [
+  { k: "Real policy engine", v: "Evaluates every action against the intent contract. 94 self-tests green on every commit." },
+  { k: "16 rules, published", v: "Compiled from two plain-English sentences." },
+  { k: "Signed permits", v: "ECDSA P-256, bound to args, single-use, hash-chained receipts." },
+  { k: "Runtime daemon", v: "OS-level enforcement (Apple Endpoint Security, Linux kernel confinement)." },
+  { k: "Gateway proxy", v: "Same contract in front of MCP tools, DBs, SaaS." },
+  { k: "MDM push flow", v: "One-click fleet enrolment with deterministic device keys." },
+  { k: "Live demo, public", v: "wrapbox-prototype.vercel.app — try it, type your own command." },
+  { k: "Waitlist, live", v: "Google-Sheets backed, welcome + newsletter automation." },
+  { k: "Delaware C-Corp", v: "Incorporated, address of record on the site." },
+  { k: "wrapbox.io", v: "Domain owned, D-U-N-S filed for Apple Endpoint Security entitlement." },
+];
+function WhatExists() {
+  return (
+    <Stage n={11}>
+      <div className="flex h-full flex-col px-[3.4cqw] pb-[2.6cqw] pt-[2.6cqw]">
+        <div className="grid grid-cols-[1.15fr_0.85fr] items-end gap-[3cqw]">
+          <div>
+            <Reveal><div className="text-[0.95cqw] font-medium text-fg-3">What exists today</div></Reveal>
+            <Reveal delay={0.08}>
+              <h2 className="mt-[0.9cqw] text-[2.9cqw] font-medium leading-[1.06] tracking-[-0.04em] text-fg">
+                Built, not planned.
+              </h2>
+            </Reveal>
+          </div>
+          <Reveal delay={0.18}>
+            <p className="max-w-[36ch] text-[1.1cqw] leading-relaxed text-fg-2">
+              Every line below is on GitHub or on the live site right now. The pre-seed is what it takes to turn a working prototype into a production runtime.
+            </p>
+          </Reveal>
+        </div>
+
+        <Par depth={3} className="mt-[1.6cqw] flex-1">
+          <div className="grid grid-cols-2 gap-x-[3cqw]">
+            {BUILT.map((b, i) => (
+              <Reveal key={b.k} delay={0.28 + i * 0.05}>
+                <div className="grid grid-cols-[13cqw_1fr] items-baseline gap-[1cqw] border-b border-line/70 py-[0.8cqw]">
+                  <span className="text-[1.02cqw] font-medium text-fg">{b.k}</span>
+                  <span className="text-[0.92cqw] leading-snug text-fg-2">{b.v}</span>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </Par>
+      </div>
+    </Stage>
+  );
+}
+
+/* ============================ 12 · roadmap ============================ */
+const ROADMAP: { when: string; label: string; body: string }[] = [
+  { when: "Q1 · Now", label: "Runtime GA on macOS", body: "Signed daemon, MDM package, Endpoint Security entitlement filed with Apple." },
+  { when: "Q2", label: "Gateway GA + 10 design partners", body: "MCP, Postgres, Stripe, GitHub. Free during pilot; paid at the end of the quarter." },
+  { when: "Q3", label: "SOC 2 Type I, passkey approvals GA", body: "Slack, Teams, and email approvers. Evidence export to Splunk and Datadog." },
+  { when: "Q4", label: "Windows and Linux runtime", body: "Feature-parity daemons. First seven-figure design partner converts to Business." },
+];
+function Roadmap() {
+  return (
+    <Stage n={12}>
+      <div className="flex h-full flex-col px-[3.4cqw] pb-[2.6cqw] pt-[2.6cqw]">
+        <div className="grid grid-cols-[1.15fr_0.85fr] items-end gap-[3cqw]">
+          <div>
+            <Reveal><div className="text-[0.95cqw] font-medium text-fg-3">Roadmap</div></Reveal>
+            <Reveal delay={0.08}>
+              <h2 className="mt-[0.9cqw] text-[2.9cqw] font-medium leading-[1.06] tracking-[-0.04em] text-fg">
+                Twelve months to a paid pilot on every plane.
+              </h2>
+            </Reveal>
+          </div>
+          <Reveal delay={0.18}>
+            <p className="max-w-[36ch] text-[1.1cqw] leading-relaxed text-fg-2">
+              Nothing that depends on Apple sits on the critical path — the runtime works today under a developer signature; the entitlement clears the App-Store-hardened install.
+            </p>
+          </Reveal>
+        </div>
+
+        <div className="mt-[1.6cqw] flex-1">
+          {ROADMAP.map((r, i) => (
+            <Reveal key={r.when} delay={0.3 + i * 0.09}>
+              <div className="grid grid-cols-[9cqw_11cqw_1fr] items-baseline gap-[1.2cqw] border-b border-line/70 py-[1cqw]">
+                <span className="font-mono text-[0.82cqw] uppercase tracking-[0.12em] text-fg-3">{r.when}</span>
+                <span className="text-[1.15cqw] font-medium tracking-[-0.01em] text-fg">{r.label}</span>
+                <span className="text-[0.95cqw] leading-snug text-fg-2">{r.body}</span>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </Stage>
+  );
+}
+
+/* ============================ 13 · team ============================ */
+function Team() {
+  return (
+    <Stage n={13}>
+      <div className="flex h-full flex-col px-[3.4cqw] pb-[2.6cqw] pt-[2.6cqw]">
+        <Reveal><div className="text-[0.95cqw] font-medium text-fg-3">Team</div></Reveal>
+        <Reveal delay={0.08}>
+          <h2 className="mt-[0.9cqw] text-[2.9cqw] font-medium leading-[1.06] tracking-[-0.04em] text-fg">
+            The founder built the product on this deck.
+          </h2>
+        </Reveal>
+
+        <div className="mt-[2.4cqw] grid grid-cols-2 items-start gap-[3cqw]">
+          <Reveal delay={0.22}>
+            <Par depth={3}>
+              <div className="grid grid-cols-[10cqw_1fr] gap-[1.4cqw]">
+                <div className="aspect-square w-[10cqw] rounded-[0.7cqw] bg-surface-2" aria-hidden />
+                <div>
+                  <div className="text-[1.4cqw] font-medium tracking-[-0.02em] text-fg">Bharath Kumar Salla</div>
+                  <div className="mt-[0.25cqw] text-[0.98cqw] text-fg-3">Founder · CEO · Engineering</div>
+                  <p className="mt-[1cqw] text-[0.98cqw] leading-relaxed text-fg-2">
+                    Designed and built the working prototype end-to-end: the policy engine, the runtime daemon, the gateway, the MDM enrolment, the evidence chain, the live demo, the site, the waitlist.
+                  </p>
+                </div>
+              </div>
+            </Par>
+          </Reveal>
+
+          <Reveal delay={0.34}>
+            <Par depth={4}>
+              <div className="rounded-[0.9cqw] bg-surface-2 px-[1.7cqw] py-[1.5cqw]">
+                <div className="font-mono text-[0.72cqw] uppercase tracking-[0.14em] text-fg-3">Company</div>
+                <div className="mt-[0.5cqw] text-[1.2cqw] font-medium text-fg">Wrapbox Inc.</div>
+                <div className="mt-[0.9cqw] grid grid-cols-[10cqw_1fr] gap-y-[0.5cqw] text-[0.92cqw]">
+                  <span className="text-fg-3">Incorporated</span><span className="text-fg-2">Delaware C-Corp · 2026</span>
+                  <span className="text-fg-3">Address</span><span className="text-fg-2">8 The Green, Ste B, Dover DE 19901</span>
+                  <span className="text-fg-3">Domain</span><span className="text-fg-2">wrapbox.io · site &amp; live demo up</span>
+                  <span className="text-fg-3">In flight</span><span className="text-fg-2">D-U-N-S; Apple Endpoint Security entitlement</span>
+                </div>
+              </div>
+            </Par>
+          </Reveal>
+        </div>
+      </div>
+    </Stage>
+  );
+}
+
+/* ============================ 14 · the ask ============================ */
+function TheAsk() {
+  return (
+    <Stage n={14}>
+      <div className="flex h-full flex-col px-[3.4cqw] pb-[2.6cqw] pt-[2.6cqw]">
+        <Reveal><div className="text-[0.95cqw] font-medium text-fg-3">The ask</div></Reveal>
+        <Reveal delay={0.08}>
+          <h2 className="mt-[0.9cqw] text-[3.2cqw] font-medium leading-[1.05] tracking-[-0.04em] text-fg">
+            Raising a pre-seed to ship the runtime<br />and land ten design partners.
+          </h2>
+        </Reveal>
+
+        <div className="mt-[2.4cqw] grid grid-cols-[1.2fr_1fr] items-start gap-[3cqw]">
+          <Par depth={3}>
+            <Reveal delay={0.2}>
+              <div className="grid grid-cols-3 gap-[1.2cqw]">
+                <div className="rounded-[0.9cqw] bg-surface-2 p-[1.4cqw]">
+                  <div className="font-mono text-[0.72cqw] uppercase tracking-[0.14em] text-fg-3">Round</div>
+                  <div className="mt-[0.5cqw] text-[2.8cqw] font-medium leading-none tracking-[-0.04em] text-fg tnum">$1.8M</div>
+                  <div className="mt-[0.6cqw] text-[0.9cqw] text-fg-2">Pre-seed · SAFE · 18 months</div>
+                </div>
+                <div className="rounded-[0.9cqw] bg-surface-2 p-[1.4cqw]">
+                  <div className="font-mono text-[0.72cqw] uppercase tracking-[0.14em] text-fg-3">Runway</div>
+                  <div className="mt-[0.5cqw] text-[2.8cqw] font-medium leading-none tracking-[-0.04em] text-fg tnum">18 mo</div>
+                  <div className="mt-[0.6cqw] text-[0.9cqw] text-fg-2">To seed-worthy milestones on the roadmap</div>
+                </div>
+                <div className="rounded-[0.9cqw] bg-surface-2 p-[1.4cqw]">
+                  <div className="font-mono text-[0.72cqw] uppercase tracking-[0.14em] text-fg-3">Milestone</div>
+                  <div className="mt-[0.5cqw] text-[2.8cqw] font-medium leading-none tracking-[-0.04em] text-fg tnum">10</div>
+                  <div className="mt-[0.6cqw] text-[0.9cqw] text-fg-2">Design partners on the paid Business plan</div>
+                </div>
+              </div>
+            </Reveal>
+
+            <Reveal delay={0.35}>
+              <div className="mt-[1.4cqw] rounded-[0.9cqw] bg-surface-2 p-[1.4cqw]">
+                <div className="font-mono text-[0.72cqw] uppercase tracking-[0.14em] text-fg-3">Use of funds</div>
+                <div className="mt-[0.7cqw] grid grid-cols-3 gap-[1cqw] text-[0.92cqw]">
+                  {[
+                    ["55%", "Engineering", "Two engineers on runtime + gateway"],
+                    ["25%", "Design-partner GTM", "One security founder-seller; travel"],
+                    ["20%", "Compliance & infra", "SOC 2 Type I, Apple ES entitlement, keys"],
+                  ].map(([p, k, v], i) => (
+                    <div key={k}>
+                      <div className="text-[1.8cqw] font-medium leading-none tracking-[-0.03em] text-fg tnum">{p}</div>
+                      <div className="mt-[0.4cqw] text-fg">{k}</div>
+                      <div className="text-fg-3">{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Reveal>
+          </Par>
+
+          <Par depth={5}>
+            <Reveal delay={0.28}>
+              <div className="rounded-[0.9cqw] bg-fg px-[1.7cqw] py-[1.6cqw] text-white">
+                <div className="font-mono text-[0.72cqw] uppercase tracking-[0.14em] text-white/55">Close</div>
+                <div className="mt-[0.5cqw] text-[2cqw] font-medium leading-[1.1] tracking-[-0.03em]">
+                  Put your agents<br />on a permit.
+                </div>
+                <div className="mt-[1.4cqw] space-y-[0.5cqw] text-[0.95cqw] leading-relaxed text-white/80">
+                  <div>Wrapbox Inc. · Bharath Kumar Salla</div>
+                  <div>bharathsallakumar@gmail.com</div>
+                  <div>wrapbox.io / demo · wrapbox-prototype.vercel.app</div>
+                </div>
+              </div>
+            </Reveal>
+          </Par>
+        </div>
+      </div>
+    </Stage>
+  );
+}
+
 /* ============================ the page ============================ */
 export function Pitch() {
   // The deck is light by design, the way the landing page is; pin the light
@@ -894,6 +1350,14 @@ export function Pitch() {
       <TheSolution />
       <HowItWorks />
       <TheProduct />
+      <WhyDifferent />
+      <WhyNow />
+      <Market />
+      <BusinessGTM />
+      <WhatExists />
+      <Roadmap />
+      <Team />
+      <TheAsk />
     </div>
   );
 }
