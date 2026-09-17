@@ -48,7 +48,7 @@ function Stage({ n, children, className }: { n: number; children: ReactNode; cla
     e.currentTarget.style.setProperty("--my", "0");
   };
   return (
-    <section id={`s${n}`} className="flex h-screen w-full snap-start snap-always items-center justify-center">
+    <section id={`s${n}`} className="flex h-screen w-full snap-start items-center justify-center">
       <div ref={ref} onMouseMove={onMove} onMouseLeave={onLeave} style={STAGE} className={cn("relative overflow-hidden bg-bg text-fg", className)}>
         {children}
         <div className="pointer-events-none absolute bottom-[2.1cqw] right-[2.6cqw] font-mono text-[0.9cqw] tabular-nums text-fg-3">
@@ -804,7 +804,7 @@ function TheProduct() {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setZoom(Math.min(1.7, Math.max(0.85, e.contentRect.width / 760))));
+    const ro = new ResizeObserver(([e]) => setZoom(Math.min(1.35, Math.max(0.8, e.contentRect.width / 760))));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -846,8 +846,8 @@ function TheProduct() {
           <Reveal delay={0.3}>
             <Par depth={5}>
               <Backdrop className="px-[1.8cqw] pb-[1.8cqw] pt-[2cqw]">
-                <div ref={ref} style={{ zoom }}>
-                  <Terminal chips height={300} />
+                <div ref={ref} style={{ zoom }} onWheelCapture={(e) => e.stopPropagation()}>
+                  <Terminal chips height={220} />
                 </div>
               </Backdrop>
             </Par>
