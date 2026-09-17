@@ -9,7 +9,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowRight, MessageSquare, Zap, KeyRound, Sparkles, ShieldCheck, X } from "lucide-react";
+import { ArrowDown, ArrowRight, MessageSquare, Zap, KeyRound, Sparkles, ShieldCheck, X, Bot, Database } from "lucide-react";
 import { SURFACES, runAction, type RunResult, type ScenarioAction, type Surface } from "../data/playground";
 import { DecisionPill, Logo, cn } from "../components/ui";
 import { WrapboxLockup } from "../components/logo";
@@ -382,137 +382,187 @@ function TheShift() {
 }
 
 /* ============================ 03 · the problem ============================ */
-// Told with three REAL, verifiable headlines and a simple diagram showing why
-// none of the existing security layers catch this: they were built for humans
-// and services, not for autonomous agents. Every incident is public and cited.
+// The problem, told as ONE picture: the agent's action arrows straight through
+// every existing security layer to the database. Each layer sits on the arrow
+// with the exact thing it sees — and doesn't. Underneath, a compact timeline
+// of real incidents makes the picture undeniable.
 interface Incident {
-  quote: string;
-  outlet: string;
-  detail: string;
   when: string;
+  vendor: string;
+  headline: string;
+  impact: string;
+  source: string;
 }
 const INCIDENTS: Incident[] = [
-  {
-    quote: '"Replit went rogue during a code freeze and deleted our entire database."',
-    outlet: "Jason Lemkin, SaaStr (X post)",
-    detail: "1,200+ executives and 1,190 companies wiped, mid-freeze.",
-    when: "Jul 2025",
-  },
-  {
-    quote: '"A Cursor agent wiped a production database in 9 seconds."',
-    outlet: "Zenity incident report · PocketOS",
-    detail: "One GraphQL mutation. Volume + every volume-level backup gone.",
-    when: "Apr 2026",
-  },
-  {
-    quote: '"Plan Mode constraint enforcement bug — agent deleted tracked files despite an explicit stop."',
-    outlet: "Cursor engineering, publicly acknowledged",
-    detail: "One of 10+ documented cases across six major agent tools.",
-    when: "Dec 2025",
-  },
+  { when: "Jul 2025", vendor: "Replit", headline: "Agent deleted a production database mid–code freeze.", impact: "1,200+ execs, 1,190 companies wiped", source: "Jason Lemkin, SaaStr" },
+  { when: "Dec 2025", vendor: "Cursor", headline: "Plan Mode enforcement bug — agent deleted tracked files despite an explicit stop.", impact: "Publicly acknowledged", source: "Cursor engineering" },
+  { when: "Apr 2026", vendor: "Cursor + Claude", headline: "Production database wiped in 9 seconds.", impact: "Every volume-level backup gone; 3-mo-old restore", source: "Zenity, PocketOS" },
+  { when: "Feb 2026", vendor: "Industry", headline: "10+ documented cases across 6 major agent tools.", impact: "Antigravity IDE · Claude Code · Cursor · Replit · +", source: "Incident Database" },
 ];
 
-// The three layers everyone already has, and what each one sees about the agent's action.
-const LAYERS: { icon: typeof KeyRound; name: string; role: string; sees: string }[] = [
-  { icon: KeyRound, name: "IAM / IdP", role: "Who the agent is", sees: "an OAuth token, not the SQL it is about to run" },
-  { icon: Sparkles, name: "Prompt guardrails", role: "What the model said", sees: "the text of the reply, not the effect it triggers" },
-  { icon: ShieldCheck, name: "EDR / DLP", role: "What the file did after", sees: "the deletion once it happened, not the ask before" },
+// The layers stacked on the agent → resource arrow. Each carries the ONE thing
+// it sees — and, in dimmer type, the thing that would actually stop the action.
+const LAYERS: { icon: typeof KeyRound; name: string; sees: string; misses: string; tint: string }[] = [
+  { icon: KeyRound, name: "Identity", sees: "an OAuth token", misses: "the SQL it is about to run", tint: "from-[#e0e6f5]" },
+  { icon: Sparkles, name: "Guardrails", sees: "the text of the reply", misses: "the effect it triggers", tint: "from-[#efe6f6]" },
+  { icon: ShieldCheck, name: "EDR / DLP", sees: "the file after it was written", misses: "the ask before", tint: "from-[#f6e6ea]" },
 ];
 
 function TheProblem() {
   const reduced = !!useReducedMotion();
   return (
     <Stage n={3}>
-      <div className="flex h-full flex-col px-[3.4cqw] pb-[2.6cqw] pt-[2.6cqw]">
-        <div className="grid flex-1 grid-cols-[0.95fr_1.05fr] items-center gap-[3.2cqw]">
-          {/* the claim */}
+      <div className="flex h-full flex-col px-[3.4cqw] pb-[2.4cqw] pt-[2.4cqw]">
+        {/* header */}
+        <div className="flex items-end justify-between">
           <div>
             <Reveal>
-              <div className="text-[0.95cqw] font-medium text-fg-3">The problem</div>
+              <div className="text-[0.9cqw] font-medium text-fg-3">The problem</div>
             </Reveal>
             <Reveal delay={0.08}>
-              <h2 className="mt-[1.1cqw] text-[3.1cqw] font-medium leading-[1.06] tracking-[-0.04em] text-fg">
-                Nobody can say what an agent<br />
-                is allowed to do <span className="relative inline-block">
+              <h2 className="mt-[0.6cqw] text-[2.6cqw] font-medium leading-[1.05] tracking-[-0.038em] text-fg">
+                Nobody can say what an agent is allowed to do{" "}
+                <span className="relative inline-block">
                   before
                   <motion.span
                     initial={{ scaleX: 0 }}
                     whileInView={{ scaleX: 1 }}
                     viewport={{ once: true }}
                     transition={reduced ? { duration: 0.01 } : { duration: 0.7, delay: 0.7, ease: EASE }}
-                    className="prism-swatch absolute -bottom-[0.1cqw] left-0 h-[0.28cqw] w-full origin-left rounded-full"
+                    className="prism-swatch absolute -bottom-[0.06cqw] left-0 h-[0.24cqw] w-full origin-left rounded-full"
                   />
-                </span>{" "}it does it.
+                </span>{" "}
+                it does it.
               </h2>
             </Reveal>
-            <Reveal delay={0.18}>
-              <p className="mt-[1.5cqw] max-w-[38ch] text-[1.2cqw] leading-relaxed text-fg-2">
-                Every enterprise already has identity, prompt guardrails and endpoint tooling. None of them can answer, in milliseconds: <span className="text-fg">is this specific action, from this specific agent, allowed right now?</span>
-              </p>
-            </Reveal>
-
-            {/* the layers that already exist and still miss it */}
-            <div className="mt-[2cqw] grid gap-[0.7cqw]">
-              {LAYERS.map((l, i) => {
-                const Icon = l.icon;
-                return (
-                  <Reveal key={l.name} delay={0.32 + i * 0.09}>
-                    <HoverCard depth={3 + i} className="grid grid-cols-[auto_1fr_auto] items-center gap-[1cqw] px-[1.1cqw] py-[0.85cqw]">
-                      <span className="grid size-[2cqw] shrink-0 place-items-center rounded-[0.5cqw] bg-surface-3 text-fg-2">
-                        <Icon className="size-[1.1cqw]" />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-[0.98cqw] font-semibold text-fg">{l.name}</span>
-                        <span className="mt-[0.15cqw] block truncate text-[0.83cqw] text-fg-3">{l.role} · sees {l.sees}</span>
-                      </span>
-                      <span className="inline-flex items-center gap-[0.35cqw] rounded-full bg-block-soft px-[0.7cqw] py-[0.28cqw] text-[0.72cqw] font-semibold uppercase tracking-[0.1em] text-block">
-                        <X className="size-[0.75cqw]" strokeWidth={2.6} /> misses it
-                      </span>
-                    </HoverCard>
-                  </Reveal>
-                );
-              })}
-            </div>
           </div>
+          <Reveal delay={0.18}>
+            <p className="max-w-[24ch] text-right text-[0.95cqw] leading-relaxed text-fg-2">
+              Every enterprise already has three layers. None of them can answer{" "}
+              <span className="text-fg">that</span> question — in milliseconds — for an agent.
+            </p>
+          </Reveal>
+        </div>
 
-          {/* the proof: real incidents */}
-          <Reveal delay={0.25}>
-            <Par depth={4}>
-              <div>
-                <div className="mb-[1cqw] flex items-baseline justify-between px-[0.4cqw]">
-                  <div className="text-[0.85cqw] font-medium uppercase tracking-[0.14em] text-fg-3">This is not hypothetical</div>
-                  <div className="text-[0.78cqw] text-fg-3">10+ documented cases across 6 agent tools · Feb 2026</div>
+        {/* THE PICTURE — the agent's action arrow, punching through every layer, to the DB */}
+        <Reveal delay={0.22}>
+          <div className="relative mt-[2.2cqw] rounded-[1cqw] bg-surface-2 px-[2cqw] py-[2cqw]">
+            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-[1.2cqw]">
+              {/* the agent */}
+              <div className="par flex flex-col items-center gap-[0.55cqw]" style={{ ["--depth" as string]: 5 } as CSSProperties}>
+                <div className="grid size-[4.2cqw] place-items-center rounded-[0.8cqw] bg-white">
+                  <Bot className="size-[2.2cqw] text-fg" />
                 </div>
-                <div className="grid gap-[0.9cqw]">
-                  {INCIDENTS.map((n, i) => (
-                    <motion.article
-                      key={n.quote}
-                      initial={{ opacity: 0, y: 16 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={reduced ? { duration: 0.01 } : { duration: 0.55, delay: 0.5 + i * 0.14, ease: EASE }}
-                      whileHover={reduced ? undefined : { y: -3 }}
-                      className="par relative overflow-hidden rounded-[0.7cqw] bg-white px-[1.4cqw] py-[1.1cqw]"
-                      style={{ ["--depth" as string]: 4 + i } as CSSProperties}
-                    >
-                      <span aria-hidden className="absolute inset-y-0 left-0 w-[0.22cqw] bg-block" />
-                      <div className="flex items-center justify-between text-[0.78cqw] text-fg-3">
-                        <span className="font-mono uppercase tracking-[0.12em] text-block">Incident</span>
-                        <span>{n.when}</span>
-                      </div>
-                      <blockquote className="mt-[0.5cqw] text-[1.15cqw] font-medium leading-[1.35] text-fg">
-                        {n.quote}
-                      </blockquote>
-                      <div className="mt-[0.7cqw] text-[0.85cqw] text-fg-2">
-                        {n.detail}
-                      </div>
-                      <div className="mt-[0.35cqw] text-[0.78cqw] text-fg-3">— {n.outlet}</div>
-                    </motion.article>
-                  ))}
+                <div className="text-[0.78cqw] font-semibold uppercase tracking-[0.12em] text-fg-2">Agent</div>
+                <div className="w-[7cqw] text-center text-[0.75cqw] leading-tight text-fg-3">Bash · MCP · git · SQL</div>
+              </div>
+
+              {/* the wall of layers on top of the shaft */}
+              <div className="relative min-h-[6cqw]">
+                {/* the shaft */}
+                <motion.span
+                  aria-hidden
+                  initial={{ scaleX: 0 }}
+                  whileInView={{ scaleX: 1 }}
+                  viewport={{ once: true }}
+                  transition={reduced ? { duration: 0.01 } : { duration: 1.1, delay: 0.35, ease: EASE }}
+                  className="absolute left-0 right-[1.4cqw] top-1/2 h-[0.3cqw] origin-left -translate-y-1/2 rounded-full bg-block/85"
+                />
+                {/* arrow head */}
+                <motion.span
+                  aria-hidden
+                  initial={{ opacity: 0, x: -8 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={reduced ? { duration: 0.01 } : { duration: 0.35, delay: 1.35 }}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 text-block"
+                >
+                  <ArrowRight className="size-[1.6cqw]" strokeWidth={2.4} />
+                </motion.span>
+
+                {/* the three layer cards sitting on the arrow */}
+                <div className="relative grid grid-cols-3 gap-[1cqw]">
+                  {LAYERS.map((l, i) => {
+                    const Icon = l.icon;
+                    return (
+                      <motion.div
+                        key={l.name}
+                        initial={{ opacity: 0, y: 18 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={reduced ? { duration: 0.01 } : { duration: 0.55, delay: 0.55 + i * 0.14, ease: EASE }}
+                        whileHover={reduced ? undefined : { y: -4 }}
+                        className={cn("par relative overflow-hidden rounded-[0.75cqw] bg-gradient-to-b to-white px-[1cqw] pb-[1.05cqw] pt-[1.05cqw]", l.tint)}
+                        style={{ ["--depth" as string]: 4 + i } as CSSProperties}
+                      >
+                        <div className="flex items-center gap-[0.55cqw]">
+                          <span className="grid size-[1.75cqw] place-items-center rounded-[0.45cqw] bg-white/80 text-fg-2">
+                            <Icon className="size-[1cqw]" />
+                          </span>
+                          <span className="text-[1cqw] font-semibold tracking-[-0.01em] text-fg">{l.name}</span>
+                          <span className="ml-auto inline-flex items-center gap-[0.25cqw] rounded-full bg-block-soft px-[0.55cqw] py-[0.18cqw] text-[0.65cqw] font-semibold uppercase tracking-[0.14em] text-block">
+                            <X className="size-[0.65cqw]" strokeWidth={2.8} /> misses
+                          </span>
+                        </div>
+                        <div className="mt-[0.7cqw] grid grid-cols-[auto_1fr] gap-x-[0.55cqw] gap-y-[0.15cqw] text-[0.78cqw]">
+                          <span className="font-mono uppercase tracking-[0.1em] text-fg-3">sees</span>
+                          <span className="text-fg-2">{l.sees}</span>
+                          <span className="font-mono uppercase tracking-[0.1em] text-fg-3">needs</span>
+                          <span className="font-medium text-fg">{l.misses}</span>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </div>
-            </Par>
-          </Reveal>
+
+              {/* the target: the database, hit */}
+              <div className="par flex flex-col items-center gap-[0.55cqw]" style={{ ["--depth" as string]: 5 } as CSSProperties}>
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0.6 }}
+                  whileInView={{ scale: [0.9, 1.08, 1], opacity: 1 }}
+                  viewport={{ once: true }}
+                  transition={reduced ? { duration: 0.01 } : { duration: 0.7, delay: 1.45, times: [0, 0.4, 1] }}
+                  className="grid size-[4.2cqw] place-items-center rounded-[0.8cqw] bg-block-soft"
+                >
+                  <Database className="size-[2.2cqw] text-block" />
+                </motion.div>
+                <div className="text-[0.78cqw] font-semibold uppercase tracking-[0.12em] text-block">Wiped</div>
+                <div className="w-[7cqw] text-center text-[0.75cqw] leading-tight text-fg-3">database, files, funds</div>
+              </div>
+            </div>
+          </div>
+        </Reveal>
+
+        {/* THE PROOF — a horizontal news wall / timeline */}
+        <div className="mt-[1.6cqw] flex-1">
+          <div className="mb-[0.6cqw] flex items-baseline justify-between">
+            <div className="text-[0.8cqw] font-medium uppercase tracking-[0.14em] text-fg-3">This is not hypothetical</div>
+            <div className="text-[0.78cqw] text-fg-3">Real, public incidents · every source checkable</div>
+          </div>
+          <div className="grid grid-cols-4 gap-[0.9cqw]">
+            {INCIDENTS.map((n, i) => (
+              <motion.article
+                key={n.headline}
+                initial={{ opacity: 0, y: 14 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={reduced ? { duration: 0.01 } : { duration: 0.5, delay: 0.9 + i * 0.1, ease: EASE }}
+                whileHover={reduced ? undefined : { y: -3 }}
+                className="par relative flex h-full flex-col rounded-[0.7cqw] bg-white px-[1cqw] py-[0.85cqw]"
+                style={{ ["--depth" as string]: 4 + i } as CSSProperties}
+              >
+                <span aria-hidden className="absolute inset-x-[1cqw] top-0 h-[0.14cqw] rounded-full bg-block/80" />
+                <div className="flex items-baseline justify-between text-[0.7cqw]">
+                  <span className="font-mono uppercase tracking-[0.12em] text-block">{n.when}</span>
+                  <span className="font-semibold text-fg-2">{n.vendor}</span>
+                </div>
+                <blockquote className="mt-[0.4cqw] text-[0.92cqw] font-medium leading-[1.28] text-fg">{n.headline}</blockquote>
+                <div className="mt-auto pt-[0.55cqw] text-[0.72cqw] leading-tight text-fg-2">{n.impact}</div>
+                <div className="mt-[0.15cqw] text-[0.66cqw] text-fg-3">— {n.source}</div>
+              </motion.article>
+            ))}
+          </div>
         </div>
       </div>
     </Stage>
