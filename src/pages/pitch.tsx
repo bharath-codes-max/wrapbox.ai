@@ -9,7 +9,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowRight, MessageSquare, Zap } from "lucide-react";
+import { ArrowDown, ArrowRight, MessageSquare, Zap, KeyRound, Sparkles, ShieldCheck, X } from "lucide-react";
 import { SURFACES, runAction, type RunResult, type ScenarioAction, type Surface } from "../data/playground";
 import { DecisionPill, Logo, cn } from "../components/ui";
 import { WrapboxLockup } from "../components/logo";
@@ -381,6 +381,144 @@ function TheShift() {
   );
 }
 
+/* ============================ 03 · the problem ============================ */
+// Told with three REAL, verifiable headlines and a simple diagram showing why
+// none of the existing security layers catch this: they were built for humans
+// and services, not for autonomous agents. Every incident is public and cited.
+interface Incident {
+  quote: string;
+  outlet: string;
+  detail: string;
+  when: string;
+}
+const INCIDENTS: Incident[] = [
+  {
+    quote: '"Replit went rogue during a code freeze and deleted our entire database."',
+    outlet: "Jason Lemkin, SaaStr (X post)",
+    detail: "1,200+ executives and 1,190 companies wiped, mid-freeze.",
+    when: "Jul 2025",
+  },
+  {
+    quote: '"A Cursor agent wiped a production database in 9 seconds."',
+    outlet: "Zenity incident report · PocketOS",
+    detail: "One GraphQL mutation. Volume + every volume-level backup gone.",
+    when: "Apr 2026",
+  },
+  {
+    quote: '"Plan Mode constraint enforcement bug — agent deleted tracked files despite an explicit stop."',
+    outlet: "Cursor engineering, publicly acknowledged",
+    detail: "One of 10+ documented cases across six major agent tools.",
+    when: "Dec 2025",
+  },
+];
+
+// The three layers everyone already has, and what each one sees about the agent's action.
+const LAYERS: { icon: typeof KeyRound; name: string; role: string; sees: string }[] = [
+  { icon: KeyRound, name: "IAM / IdP", role: "Who the agent is", sees: "an OAuth token, not the SQL it is about to run" },
+  { icon: Sparkles, name: "Prompt guardrails", role: "What the model said", sees: "the text of the reply, not the effect it triggers" },
+  { icon: ShieldCheck, name: "EDR / DLP", role: "What the file did after", sees: "the deletion once it happened, not the ask before" },
+];
+
+function TheProblem() {
+  const reduced = !!useReducedMotion();
+  return (
+    <Stage n={3}>
+      <div className="flex h-full flex-col px-[3.4cqw] pb-[2.6cqw] pt-[2.6cqw]">
+        <div className="grid flex-1 grid-cols-[0.95fr_1.05fr] items-center gap-[3.2cqw]">
+          {/* the claim */}
+          <div>
+            <Reveal>
+              <div className="text-[0.95cqw] font-medium text-fg-3">The problem</div>
+            </Reveal>
+            <Reveal delay={0.08}>
+              <h2 className="mt-[1.1cqw] text-[3.1cqw] font-medium leading-[1.06] tracking-[-0.04em] text-fg">
+                Nobody can say what an agent<br />
+                is allowed to do <span className="relative inline-block">
+                  before
+                  <motion.span
+                    initial={{ scaleX: 0 }}
+                    whileInView={{ scaleX: 1 }}
+                    viewport={{ once: true }}
+                    transition={reduced ? { duration: 0.01 } : { duration: 0.7, delay: 0.7, ease: EASE }}
+                    className="prism-swatch absolute -bottom-[0.1cqw] left-0 h-[0.28cqw] w-full origin-left rounded-full"
+                  />
+                </span>{" "}it does it.
+              </h2>
+            </Reveal>
+            <Reveal delay={0.18}>
+              <p className="mt-[1.5cqw] max-w-[38ch] text-[1.2cqw] leading-relaxed text-fg-2">
+                Every enterprise already has identity, prompt guardrails and endpoint tooling. None of them can answer, in milliseconds: <span className="text-fg">is this specific action, from this specific agent, allowed right now?</span>
+              </p>
+            </Reveal>
+
+            {/* the layers that already exist and still miss it */}
+            <div className="mt-[2cqw] grid gap-[0.7cqw]">
+              {LAYERS.map((l, i) => {
+                const Icon = l.icon;
+                return (
+                  <Reveal key={l.name} delay={0.32 + i * 0.09}>
+                    <HoverCard depth={3 + i} className="grid grid-cols-[auto_1fr_auto] items-center gap-[1cqw] px-[1.1cqw] py-[0.85cqw]">
+                      <span className="grid size-[2cqw] shrink-0 place-items-center rounded-[0.5cqw] bg-surface-3 text-fg-2">
+                        <Icon className="size-[1.1cqw]" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[0.98cqw] font-semibold text-fg">{l.name}</span>
+                        <span className="mt-[0.15cqw] block truncate text-[0.83cqw] text-fg-3">{l.role} · sees {l.sees}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-[0.35cqw] rounded-full bg-block-soft px-[0.7cqw] py-[0.28cqw] text-[0.72cqw] font-semibold uppercase tracking-[0.1em] text-block">
+                        <X className="size-[0.75cqw]" strokeWidth={2.6} /> misses it
+                      </span>
+                    </HoverCard>
+                  </Reveal>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* the proof: real incidents */}
+          <Reveal delay={0.25}>
+            <Par depth={4}>
+              <div>
+                <div className="mb-[1cqw] flex items-baseline justify-between px-[0.4cqw]">
+                  <div className="text-[0.85cqw] font-medium uppercase tracking-[0.14em] text-fg-3">This is not hypothetical</div>
+                  <div className="text-[0.78cqw] text-fg-3">10+ documented cases across 6 agent tools · Feb 2026</div>
+                </div>
+                <div className="grid gap-[0.9cqw]">
+                  {INCIDENTS.map((n, i) => (
+                    <motion.article
+                      key={n.quote}
+                      initial={{ opacity: 0, y: 16 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={reduced ? { duration: 0.01 } : { duration: 0.55, delay: 0.5 + i * 0.14, ease: EASE }}
+                      whileHover={reduced ? undefined : { y: -3 }}
+                      className="par relative overflow-hidden rounded-[0.7cqw] bg-white px-[1.4cqw] py-[1.1cqw]"
+                      style={{ ["--depth" as string]: 4 + i } as CSSProperties}
+                    >
+                      <span aria-hidden className="absolute inset-y-0 left-0 w-[0.22cqw] bg-block" />
+                      <div className="flex items-center justify-between text-[0.78cqw] text-fg-3">
+                        <span className="font-mono uppercase tracking-[0.12em] text-block">Incident</span>
+                        <span>{n.when}</span>
+                      </div>
+                      <blockquote className="mt-[0.5cqw] text-[1.15cqw] font-medium leading-[1.35] text-fg">
+                        {n.quote}
+                      </blockquote>
+                      <div className="mt-[0.7cqw] text-[0.85cqw] text-fg-2">
+                        {n.detail}
+                      </div>
+                      <div className="mt-[0.35cqw] text-[0.78cqw] text-fg-3">— {n.outlet}</div>
+                    </motion.article>
+                  ))}
+                </div>
+              </div>
+            </Par>
+          </Reveal>
+        </div>
+      </div>
+    </Stage>
+  );
+}
+
 /* ============================ the page ============================ */
 export function Pitch() {
   // The deck is light by design, the way the landing page is; pin the light
@@ -413,6 +551,7 @@ export function Pitch() {
     <div className="h-screen snap-y snap-mandatory overflow-y-auto bg-bg scroll-thin" style={{ fontFamily: "var(--font-sans)" }}>
       <Cover />
       <TheShift />
+      <TheProblem />
     </div>
   );
 }
