@@ -621,6 +621,169 @@ function TheSolution() {
   );
 }
 
+/* ============================ 05 · how it works ============================ */
+// The architecture as one quiet diagram: the control plane holds the contract,
+// and the same contract is enforced at two points — on the employee's device
+// (the runtime) and in front of the company's systems (the gateway). Every
+// decision, at either point, comes back as a signed receipt. Real vendor marks
+// show what each point governs; no icons, no colour, connectors are hairlines.
+const RUNTIME_MARKS: { logo: string; name: string }[] = [
+  { logo: "claudecode", name: "Claude Code" },
+  { logo: "cursor", name: "Cursor" },
+  { logo: "githubcopilot", name: "Copilot" },
+  { logo: "google", name: "Chrome" },
+  { logo: "claude", name: "Claude Desktop" },
+];
+const GATEWAY_MARKS: { logo: string; name: string }[] = [
+  { logo: "stripe", name: "Stripe" },
+  { logo: "postgresql", name: "Postgres" },
+  { logo: "github_light", name: "GitHub" },
+  { logo: "aws", name: "AWS" },
+  { logo: "slack", name: "Slack" },
+  { logo: "salesforce", name: "Salesforce" },
+];
+
+function Rail({ delay, reduced, className }: { delay: number; reduced: boolean; className?: string }) {
+  return (
+    <motion.span
+      aria-hidden
+      initial={{ scaleY: 0 }}
+      whileInView={{ scaleY: 1 }}
+      viewport={{ once: true }}
+      transition={reduced ? { duration: 0.01 } : { duration: 0.5, delay, ease: EASE }}
+      className={cn("block w-px origin-top bg-line-strong", className)}
+    />
+  );
+}
+
+function Plane({
+  eyebrow,
+  title,
+  where,
+  copy,
+  marks,
+  delay,
+  reduced,
+  depth,
+}: {
+  eyebrow: string;
+  title: string;
+  where: string;
+  copy: string;
+  marks: { logo: string; name: string }[];
+  delay: number;
+  reduced: boolean;
+  depth: number;
+}) {
+  return (
+    <Reveal delay={delay} className="h-full">
+      <Par depth={depth} className="h-full">
+        <motion.div whileHover={reduced ? undefined : { y: -4 }} transition={{ type: "spring", stiffness: 260, damping: 22 }} className="flex h-full flex-col rounded-[0.9cqw] bg-surface-2 px-[1.7cqw] py-[1.5cqw] transition-colors hover:bg-surface-3">
+          <div className="font-mono text-[0.72cqw] uppercase tracking-[0.14em] text-fg-3">{eyebrow}</div>
+          <div className="mt-[0.5cqw] flex items-baseline gap-[0.7cqw]">
+            <span className="text-[1.7cqw] font-medium tracking-[-0.03em] text-fg">{title}</span>
+            <span className="text-[0.95cqw] text-fg-3">{where}</span>
+          </div>
+          <p className="mt-[0.7cqw] max-w-[44ch] text-[0.95cqw] leading-relaxed text-fg-2">{copy}</p>
+          <div className="mt-auto flex flex-wrap gap-[0.5cqw] pt-[1.2cqw]">
+            {marks.map((m) => (
+              <span key={m.name} className="inline-flex items-center gap-[0.45cqw] rounded-full bg-white px-[0.7cqw] py-[0.3cqw] text-[0.8cqw] text-fg-2">
+                <Logo name={m.logo} size={16} rounded="rounded-[4px]" />
+                {m.name}
+              </span>
+            ))}
+          </div>
+        </motion.div>
+      </Par>
+    </Reveal>
+  );
+}
+
+function HowItWorks() {
+  const reduced = !!useReducedMotion();
+  return (
+    <Stage n={5}>
+      <div className="flex h-full flex-col px-[3.4cqw] pb-[3.8cqw] pt-[2.6cqw]">
+        <div className="grid grid-cols-[1.15fr_0.85fr] items-end gap-[3cqw]">
+          <div>
+            <Reveal>
+              <div className="text-[0.95cqw] font-medium text-fg-3">How it works</div>
+            </Reveal>
+            <Reveal delay={0.08}>
+              <h2 className="mt-[0.9cqw] text-[2.9cqw] font-medium leading-[1.06] tracking-[-0.04em] text-fg">
+                Two enforcement points.<br />One contract.
+              </h2>
+            </Reveal>
+          </div>
+          <Reveal delay={0.18}>
+            <p className="max-w-[36ch] text-[1.1cqw] leading-relaxed text-fg-2">
+              The contract lives in one place and is enforced in two: on the employee&rsquo;s machine, where the agent runs, and in front of the systems it reaches for. Either way the answer comes back signed.
+            </p>
+          </Reveal>
+        </div>
+
+        {/* the diagram */}
+        <div className="mt-[1.6cqw] flex flex-1 flex-col">
+          {/* control plane */}
+          <Reveal delay={0.25} className="mx-auto w-[46cqw]">
+            <Par depth={2}>
+              <div className="rounded-[0.9cqw] bg-fg px-[1.7cqw] py-[1.2cqw] text-white">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[1.35cqw] font-medium tracking-[-0.02em]">Control plane</span>
+                  <span className="font-mono text-[0.72cqw] uppercase tracking-[0.14em] text-white/55">console.wrapbox.ai</span>
+                </div>
+                <p className="mt-[0.35cqw] text-[0.92cqw] leading-relaxed text-white/75">Holds the intent contract, compiles it into rules, pushes them to every enforcement point, and signs every receipt that comes back.</p>
+              </div>
+            </Par>
+          </Reveal>
+
+          {/* rails down to the two planes */}
+          <div className="relative h-[2.6cqw] w-full">
+            <Rail delay={0.55} reduced={reduced} className="absolute left-1/2 top-0 h-[1.3cqw] -translate-x-1/2" />
+            <motion.span aria-hidden initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true }} transition={reduced ? { duration: 0.01 } : { duration: 0.5, delay: 0.75, ease: EASE }} className="absolute left-1/4 right-1/4 top-[1.3cqw] h-px bg-line-strong" />
+            <Rail delay={0.95} reduced={reduced} className="absolute left-1/4 top-[1.3cqw] h-[1.3cqw]" />
+            <Rail delay={0.95} reduced={reduced} className="absolute left-3/4 top-[1.3cqw] h-[1.3cqw]" />
+          </div>
+
+          {/* the two planes */}
+          <div className="grid flex-1 grid-cols-2 items-stretch gap-[1.6cqw]">
+            <Plane
+              eyebrow="Enforcement point 1"
+              title="Runtime"
+              where="on the device"
+              copy="A small daemon, pushed to the fleet by MDM in one click. It sits at the operating-system level — Apple Endpoint Security on macOS, kernel confinement on Linux — so it sees every command, file and network call an agent makes, whichever agent it is."
+              marks={RUNTIME_MARKS}
+              delay={1.05}
+              reduced={reduced}
+              depth={4}
+            />
+            <Plane
+              eyebrow="Enforcement point 2"
+              title="Gateway"
+              where="in front of company systems"
+              copy="A proxy the agent's tools are pointed at. It applies the same contract to every call into a database, an API, an MCP tool or a SaaS product — even when the agent runs somewhere Wrapbox is not installed."
+              marks={GATEWAY_MARKS}
+              delay={1.15}
+              reduced={reduced}
+              depth={5}
+            />
+          </div>
+
+          {/* the receipt */}
+          <Reveal delay={1.35} className="mt-[1.4cqw]">
+            <div className="flex items-center justify-between rounded-[0.7cqw] bg-surface-2 px-[1.5cqw] py-[0.9cqw]">
+              <div className="text-[0.95cqw] text-fg-2">
+                <span className="font-medium text-fg">Every decision comes back signed.</span> ECDSA P-256, bound to the exact arguments, single use, hash-chained into the evidence log.
+              </div>
+              <div className="font-mono text-[0.78cqw] text-fg-3">permit wbp_… · receipt WB-… · kid wbx-2026-09</div>
+            </div>
+          </Reveal>
+        </div>
+      </div>
+    </Stage>
+  );
+}
+
 /* ============================ the page ============================ */
 export function Pitch() {
   // The deck is light by design, the way the landing page is; pin the light
@@ -655,6 +818,7 @@ export function Pitch() {
       <TheShift />
       <TheProblem />
       <TheSolution />
+      <HowItWorks />
     </div>
   );
 }
