@@ -4,7 +4,9 @@
  * It owns three things:
  *   1. the sheet          — one row per signup, de-duplicated by email
  *   2. the welcome email  — sent from your own Gmail via MailApp (free quota: 100/day
- *                           on a consumer account, 1,500/day on Workspace)
+ *                           on a consumer account, 1,500/day on Workspace). Sent by a
+ *                           1-minute timer (sendPendingWelcomes), NOT inside doPost —
+ *                           so a slow Gmail send can never make a signup itself time out.
  *   3. the row count      — available via doGet/action:'count' for any internal use
  *
  * ── SETUP (once, ~4 minutes) ────────────────────────────────────────────────
@@ -14,7 +16,8 @@
  *    (If you instead created this script from the Sheet itself via
  *     Extensions → Apps Script, you can leave SHEET_ID empty.)
  * 3. Paste this whole file over the sample code in Code.gs, then Save.
- * 4. Run ▸ setupSheet  once. Approve the permissions prompt (Sheets + Gmail send).
+ * 4. Run ▸ setupSheet  once. Approve the permissions prompt (Sheets + Gmail send +
+ *    "manage your triggers" — new this version, for the 1-minute welcome-email timer).
  *    "Google hasn't verified this app" → Advanced → Go to <project> (unsafe).
  *    It's your own script; that warning is just for unpublished projects.
  * 5. Deploy → New deployment → gear ▸ Web app.
@@ -23,9 +26,12 @@
  *    Deploy, then copy the /exec URL.
  * 6. In Vercel → your project → Settings → Environment Variables, add:
  *       WAITLIST_SHEET_URL = <the /exec URL>
- *    Redeploy. Done — signups land in the sheet and the welcome mail goes out.
+ *    Redeploy. Done — signups land in the sheet instantly and the welcome mail
+ *    follows within about a minute.
  *
- * Re-deploying after an edit: Deploy → Manage deployments → edit ▸ New version.
+ * Already deployed and just pulled this update? Re-paste this file, Save, then
+ * run ▸ setupSheet once more (it re-installs the timer; running it twice is
+ * harmless) — Deploy → Manage deployments → edit ▸ New version, same as any edit.
  * The /exec URL stays the same, so the Vercel env var never changes.
  */
 
@@ -59,6 +65,7 @@ var HEADERS_V2 = ['position', 'joined_at', 'name', 'email', 'phone', 'company', 
 function setupSheet() {
   var ss = book_();
   var sh = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
+  ensureWelcomeTrigger_(); // idempotent — safe to call on every run of setupSheet
 
   if (sh.getLastRow() === 0) {
     sh.appendRow(HEADERS);
@@ -161,11 +168,13 @@ function doPost(e) {
     }
 
     var position = sh.getLastRow();          // header occupies row 1, so this is the next position
-    var sent = false;
-    if (SEND_WELCOME_EMAIL) {
-      try { sendWelcome_(email, position, name); sent = true; } catch (err) { sent = false; }
-    }
-    sh.appendRow([position, new Date(), name, email, phone, role, company, companyUrl, message, sent ? 'yes' : 'no']);
+    // The row is written and the response returned WITHOUT waiting on Gmail:
+    // MailApp.sendEmail can occasionally take long enough (especially on a
+    // cold start) to blow past the caller's own timeout, which would report
+    // a false failure even though the signup itself succeeded. The welcome
+    // email is sent a few seconds later by sendPendingWelcomes(), on a timer
+    // this file's own setupSheet() installs — see below.
+    sh.appendRow([position, new Date(), name, email, phone, role, company, companyUrl, message, SEND_WELCOME_EMAIL ? 'pending' : 'no']);
 
     return json_({ ok: true, position: position, duplicate: false, count: Math.max(0, sh.getLastRow() - 1) });
   } catch (err) {
@@ -179,6 +188,46 @@ function doPost(e) {
 function doGet() {
   var sh = sheet_();
   return json_({ ok: true, count: Math.max(0, sh.getLastRow() - 1) });
+}
+
+var WELCOME_SENT_COL = 10; // column J — must match HEADERS' welcome_sent position
+
+/**
+ * Runs on a 1-minute timer (installed once by setupSheet). Sends the welcome
+ * mail for any row still marked 'pending' — decoupled from doPost entirely,
+ * so a slow Gmail send can never make a signup itself time out. A row stays
+ * 'pending' and is simply retried next run if sending throws.
+ */
+function sendPendingWelcomes() {
+  var sh = sheet_();
+  var last = sh.getLastRow();
+  if (last < 2) return 'nothing pending';
+
+  var rows = sh.getRange(2, 1, last - 1, HEADERS.length).getValues();
+  var sent = 0, failed = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    if (String(r[WELCOME_SENT_COL - 1]) !== 'pending') continue;
+    var email = String(r[3] || '').trim();
+    if (!email) continue;
+    try {
+      sendWelcome_(email, r[0], String(r[2] || ''));
+      sh.getRange(i + 2, WELCOME_SENT_COL).setValue('yes');
+      sent++;
+    } catch (err) {
+      failed++; // stays 'pending' — picked up again next run
+    }
+  }
+  return 'sent ' + sent + ', failed (retrying next run): ' + failed;
+}
+
+/** Idempotent: only installs the 1-minute trigger for sendPendingWelcomes if it isn't there yet. */
+function ensureWelcomeTrigger_() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'sendPendingWelcomes') return;
+  }
+  ScriptApp.newTrigger('sendPendingWelcomes').timeBased().everyMinutes(1).create();
 }
 
 /* ── the welcome email ────────────────────────────────────────────────────── */
