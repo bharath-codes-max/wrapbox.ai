@@ -46,7 +46,7 @@ function Stage({ n, children, className }: { n: number; children: ReactNode; cla
   };
   return (
     <section id={`s${n}`} className="flex h-screen w-full snap-start snap-always items-center justify-center">
-      <div ref={ref} onMouseMove={onMove} onMouseLeave={onLeave} style={STAGE} className={cn("relative overflow-hidden rounded-[1.1cqw] border border-line bg-bg text-fg", className)}>
+      <div ref={ref} onMouseMove={onMove} onMouseLeave={onLeave} style={STAGE} className={cn("relative overflow-hidden bg-bg text-fg", className)}>
         {children}
         <div className="pointer-events-none absolute bottom-[2.1cqw] right-[2.6cqw] font-mono text-[0.9cqw] tabular-nums text-fg-3">
           {String(n).padStart(2, "0")} / {TOTAL}
@@ -64,8 +64,8 @@ function Backdrop({ children, className }: { children: ReactNode; className?: st
 /** A framed window, the way the landing page frames the app. */
 function Window({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
   return (
-    <div className={cn("overflow-hidden rounded-[0.9cqw] bg-white ring-1 ring-black/10", className)}>
-      <div className="flex h-[2.1cqw] items-center gap-[0.7cqw] border-b border-black/[0.06] bg-[#f3f2ee] px-[0.9cqw]">
+    <div className={cn("overflow-hidden rounded-[0.9cqw] bg-white", className)}>
+      <div className="flex h-[2.1cqw] items-center gap-[0.7cqw] bg-[#f3f2ee] px-[0.9cqw]">
         <span className="flex gap-[0.35cqw]">
           <span className="size-[0.6cqw] rounded-full bg-[#ff5f57]" />
           <span className="size-[0.6cqw] rounded-full bg-[#febc2e]" />
@@ -95,7 +95,7 @@ function HoverCard({ children, className, depth = 0 }: { children: ReactNode; cl
     <motion.div
       whileHover={reduced ? undefined : { y: -4, scale: 1.012 }}
       transition={{ type: "spring", stiffness: 260, damping: 22 }}
-      className={cn("group h-full rounded-[0.8cqw] border border-line bg-surface transition-colors hover:border-line-strong", className)}
+      className={cn("group h-full rounded-[0.8cqw] bg-surface-2 transition-colors hover:bg-surface-3", className)}
     >
       {children}
     </motion.div>
@@ -177,7 +177,7 @@ function DecisionWindow({ reduced }: { reduced: boolean }) {
                 animate={{ opacity: newest ? 1 : 0.55, y: 0 }}
                 exit={{ opacity: 0, transition: { duration: 0.2 } }}
                 transition={reduced ? { duration: 0.01 } : { duration: 0.45, ease: EASE }}
-                className={cn("grid grid-cols-[auto_1fr_auto] items-center gap-x-[0.9cqw] border-t border-line px-[1.1cqw] py-[0.85cqw] text-[#111c35]", newest && "bg-[#f6f5f1]")}
+                className={cn("grid grid-cols-[auto_1fr_auto] items-center gap-x-[0.9cqw] px-[1.1cqw] py-[0.85cqw] text-[#111c35]", newest && "bg-[#f6f5f1]")}
               >
                 {s.surface.logo ? <Logo name={s.surface.logo} size={24} rounded="rounded-[6px]" /> : <span className="size-[1.6cqw] rounded-[6px] bg-black/10" />}
                 <div className="min-w-0">
@@ -196,7 +196,7 @@ function DecisionWindow({ reduced }: { reduced: boolean }) {
           })}
         </AnimatePresence>
       </div>
-      <div className="flex items-center gap-[0.5cqw] border-t border-line bg-[#f6f5f1] px-[1.1cqw] py-[0.6cqw] text-[0.8cqw] text-black/55">
+      <div className="flex items-center gap-[0.5cqw] bg-[#f0efe9] px-[1.1cqw] py-[0.6cqw] text-[0.8cqw] text-black/55">
         <span className="size-[0.5cqw] rounded-full bg-allow live-dot" />
         Decided by the real Wrapbox engine as you watch — not a mockup.
       </div>
@@ -211,7 +211,7 @@ function Cover() {
       <div className="flex h-full flex-col px-[3.4cqw] pb-[2.6cqw] pt-[2.4cqw]">
         <header className="flex items-center justify-between">
           <WrapboxLockup size={22} />
-          <span className="inline-flex h-[1.9cqw] items-center rounded-full border border-line bg-surface px-[1cqw] text-[0.85cqw] text-fg-2">Pre-seed · 2026</span>
+          <span className="inline-flex h-[1.9cqw] items-center rounded-full bg-surface-2 px-[1cqw] text-[0.85cqw] text-fg-2">Pre-seed · 2026</span>
         </header>
 
         <div className="grid flex-1 grid-cols-[1.05fr_1fr] items-center gap-[3.6cqw]">
@@ -333,7 +333,7 @@ function TheShift() {
                       <div className="mt-[0.7cqw] text-[0.85cqw] text-black/45">A human read it, thought about it, and typed it.</div>
                     </div>
 
-                    <div className="relative h-[1.9cqw] border-y border-line bg-[#faf9f6]">
+                    <div className="relative h-[1.9cqw] bg-[#f0efe9]">
                       <motion.span
                         initial={{ opacity: 0, y: -6 }}
                         whileInView={{ opacity: 1, y: 0 }}
