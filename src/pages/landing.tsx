@@ -773,15 +773,20 @@ function Pricing() {
 /* ------------------------------------------------------------------ */
 
 // Everything here is answered by /api/waitlist, which writes to a real sheet and
-// sends the confirmation mail. The position and the count are whatever the sheet
-// returns — never a number this page made up — so "you're on the list" can only
-// appear when the row actually landed.
-const WL_ROLES: { id: string; label: string }[] = [
-  { id: "security", label: "Security" },
-  { id: "platform", label: "Platform / DevOps" },
-  { id: "engineering-leadership", label: "Engineering leadership" },
-  { id: "other", label: "Something else" },
-];
+// sends the confirmation mail. Field names are used by a real person on the
+// other end, not stored to power a vanity counter — so this page never shows
+// a "N teams on the list" figure; it always shows the plain form.
+//
+// Company is a real-company lookup (Clearbit's free, keyless autocomplete —
+// no account, no CORS issue, returns name + domain) with a manual fallback
+// for anyone whose company isn't in it. Picking a suggestion also fills the
+// (optional) company URL, which stays editable either way.
+const REQUIRED_LABEL = <span className="ml-1 text-block">*</span>;
+
+interface CompanySuggestion {
+  name: string;
+  domain: string;
+}
 
 interface WlDone {
   position: number;
@@ -789,28 +794,59 @@ interface WlDone {
   email: string;
 }
 
+function useCompanySuggestions(query: string, enabled: boolean) {
+  const [items, setItems] = useState<CompanySuggestion[]>([]);
+  useEffect(() => {
+    if (!enabled || query.trim().length < 2) {
+      setItems([]);
+      return;
+    }
+    let live = true;
+    const t = setTimeout(() => {
+      fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(query.trim())}`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((rows: CompanySuggestion[]) => live && setItems(Array.isArray(rows) ? rows.slice(0, 6) : []))
+        .catch(() => live && setItems([]));
+    }, 220); // debounce — this is a public rate-limited API, no key
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [query, enabled]);
+  return items;
+}
+
 function Waitlist() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("security");
+  const [phone, setPhone] = useState("");
   const [company, setCompany] = useState("");
+  const [companyUrl, setCompanyUrl] = useState("");
+  const [message, setMessage] = useState("");
+  const [manualCompany, setManualCompany] = useState(false);
+  const [companyOpen, setCompanyOpen] = useState(false);
   const [state, setState] = useState<"idle" | "sending">("idle");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<WlDone | null>(null);
-  const [count, setCount] = useState<number | null>(null);
 
-  // The live number on the list. Absent (not zero, not invented) when the sheet
-  // cannot be read, and the counter simply does not render.
-  useEffect(() => {
-    let live = true;
-    fetch("/api/waitlist")
-      .then((r) => r.json())
-      .then((d) => live && typeof d?.count === "number" && setCount(d.count))
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, []);
+  const suggestions = useCompanySuggestions(company, companyOpen && !manualCompany);
 
+  const pickCompany = (c: CompanySuggestion) => {
+    setCompany(c.name);
+    setCompanyUrl(`https://${c.domain}`);
+    setCompanyOpen(false);
+  };
+  const useManualCompany = () => {
+    setManualCompany(true);
+    setCompanyOpen(false);
+  };
+
+  // Deliberately permissive: every field but the message reads as required in
+  // the UI (the asterisk, the placeholders), but nothing here blocks the
+  // click — a half-filled form still reaches a person rather than trapping
+  // someone behind client-side validation. The one exception is the email
+  // shape, checked server-side, because a malformed address has nowhere to
+  // send the confirmation to.
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (state === "sending") return;
@@ -820,7 +856,7 @@ function Waitlist() {
       const r = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, role, company }),
+        body: JSON.stringify({ name, email, phone, company, companyUrl, message }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok || !d?.ok) {
@@ -828,13 +864,14 @@ function Waitlist() {
         setState("idle");
         return;
       }
-      if (typeof d.count === "number") setCount(d.count);
       setDone({ position: d.position, duplicate: !!d.duplicate, email });
     } catch {
       setError("We couldn't reach the waitlist. Check your connection and try again.");
     }
     setState("idle");
   };
+
+  const fieldClass = "mt-2 h-11 w-full rounded-xl border border-line bg-bg px-3.5 text-[14.5px] text-fg outline-none transition-colors placeholder:text-fg-3 focus:border-line-strong";
 
   return (
     <section id="waitlist" className="scroll-mt-20 py-16 sm:py-24">
@@ -879,49 +916,119 @@ function Waitlist() {
                   </motion.div>
                 ) : (
                   <motion.form key="form" onSubmit={submit} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
-                    <label htmlFor="wl-email" className="block text-[13px] font-medium text-fg">
-                      Work email
-                    </label>
-                    <input
-                      id="wl-email"
-                      type="email"
-                      required
-                      autoComplete="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@company.com"
-                      className="mt-2 h-11 w-full rounded-xl border border-line bg-bg px-3.5 text-[14.5px] text-fg outline-none transition-colors placeholder:text-fg-3 focus:border-line-strong"
-                    />
-
-                    <div className="mt-5 text-[13px] font-medium text-fg">What do you work on?</div>
-                    <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="What do you work on?">
-                      {WL_ROLES.map((r) => (
-                        <button
-                          key={r.id}
-                          type="button"
-                          role="radio"
-                          aria-checked={role === r.id}
-                          onClick={() => setRole(r.id)}
-                          className={cn(
-                            "relative h-8 rounded-full border px-3.5 text-[13px] font-medium transition-colors",
-                            role === r.id ? "border-transparent text-white" : "border-line bg-bg text-fg-2 hover:text-fg",
-                          )}
-                        >
-                          {role === r.id && <motion.span layoutId="wl-role" className="absolute inset-0 rounded-full bg-[#111113]" transition={{ type: "spring", duration: 0.35, bounce: 0.15 }} />}
-                          <span className="relative">{r.label}</span>
-                        </button>
-                      ))}
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor="wl-name" className="block text-[13px] font-medium text-fg">
+                          Name {REQUIRED_LABEL}
+                        </label>
+                        <input id="wl-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Priya Nair" className={fieldClass} />
+                      </div>
+                      <div>
+                        <label htmlFor="wl-email" className="block text-[13px] font-medium text-fg">
+                          Work email {REQUIRED_LABEL}
+                        </label>
+                        <input id="wl-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" className={fieldClass} />
+                      </div>
                     </div>
 
-                    <label htmlFor="wl-company" className="mt-5 block text-[13px] font-medium text-fg">
-                      Company <span className="font-normal text-fg-3">— optional</span>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      {/* Company: search real companies, or drop to a plain field. */}
+                      <div className="relative">
+                        <label htmlFor="wl-company" className="block text-[13px] font-medium text-fg">
+                          Company {REQUIRED_LABEL}
+                        </label>
+                        {manualCompany ? (
+                          <input
+                            id="wl-company"
+                            value={company}
+                            onChange={(e) => setCompany(e.target.value)}
+                            placeholder="Your company's name"
+                            autoFocus
+                            className={fieldClass}
+                          />
+                        ) : (
+                          <input
+                            id="wl-company"
+                            value={company}
+                            onChange={(e) => {
+                              setCompany(e.target.value);
+                              setCompanyOpen(true);
+                            }}
+                            onFocus={() => setCompanyOpen(true)}
+                            onBlur={() => setTimeout(() => setCompanyOpen(false), 150)}
+                            placeholder="Start typing — Northwind Financial…"
+                            autoComplete="off"
+                            role="combobox"
+                            aria-expanded={companyOpen}
+                            aria-autocomplete="list"
+                            className={fieldClass}
+                          />
+                        )}
+                        <AnimatePresence>
+                          {companyOpen && !manualCompany && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute inset-x-0 top-full z-20 mt-1.5 overflow-hidden rounded-xl border border-line bg-surface shadow-[0_20px_50px_-20px_rgba(17,17,19,0.35)]"
+                            >
+                              {suggestions.map((c) => (
+                                <button
+                                  key={c.domain}
+                                  type="button"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => pickCompany(c)}
+                                  className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13.5px] text-fg hover:bg-bg"
+                                >
+                                  <img src={`https://logo.clearbit.com/${c.domain}?size=32`} alt="" className="size-5 rounded-[5px] bg-bg object-contain" onError={(e) => ((e.target as HTMLImageElement).style.visibility = "hidden")} />
+                                  <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                                  <span className="shrink-0 text-[12px] text-fg-3">{c.domain}</span>
+                                </button>
+                              ))}
+                              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={useManualCompany} className="flex w-full items-center gap-2 border-t border-line px-3.5 py-2.5 text-left text-[13px] font-medium text-fg-2 hover:bg-bg hover:text-fg">
+                                Can't find it — type it in manually
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                        {manualCompany && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setManualCompany(false);
+                              setCompany("");
+                            }}
+                            className="mt-1.5 text-[12px] text-fg-3 hover:text-fg"
+                          >
+                            Search companies instead
+                          </button>
+                        )}
+                      </div>
+
+                      <div>
+                        <label htmlFor="wl-phone" className="block text-[13px] font-medium text-fg">
+                          Phone {REQUIRED_LABEL}
+                        </label>
+                        <input id="wl-phone" type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 415 555 0100" className={fieldClass} />
+                      </div>
+                    </div>
+
+                    <label htmlFor="wl-url" className="mt-4 block text-[13px] font-medium text-fg">
+                      Company URL <span className="font-normal text-fg-3">— optional</span>
                     </label>
-                    <input
-                      id="wl-company"
-                      value={company}
-                      onChange={(e) => setCompany(e.target.value)}
-                      placeholder="Northwind Financial"
-                      className="mt-2 h-11 w-full rounded-xl border border-line bg-bg px-3.5 text-[14.5px] text-fg outline-none transition-colors placeholder:text-fg-3 focus:border-line-strong"
+                    <input id="wl-url" type="url" value={companyUrl} onChange={(e) => setCompanyUrl(e.target.value)} placeholder="https://northwindfinancial.com" className={fieldClass} />
+
+                    <label htmlFor="wl-message" className="mt-4 block text-[13px] font-medium text-fg">
+                      Message <span className="font-normal text-fg-3">— optional</span>
+                    </label>
+                    <textarea
+                      id="wl-message"
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      placeholder="Which agents are you running today?"
+                      rows={2}
+                      className="mt-2 w-full resize-none rounded-xl border border-line bg-bg px-3.5 py-2.5 text-[14.5px] leading-relaxed text-fg outline-none transition-colors placeholder:text-fg-3 focus:border-line-strong"
                     />
 
                     <button
@@ -948,15 +1055,7 @@ function Waitlist() {
                       )}
                     </AnimatePresence>
 
-                    <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-fg-3">
-                      {count !== null && (
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="size-1.5 rounded-full bg-allow live-dot" />
-                          <span className="font-medium text-fg-2 tnum">{count.toLocaleString("en-US")}</span> {count === 1 ? "team" : "teams"} on the list
-                        </span>
-                      )}
-                      <span>No newsletter. One email when your access opens.</span>
-                    </div>
+                    <p className="mt-4 text-[12.5px] text-fg-3">No newsletter. One email when your access opens.</p>
                   </motion.form>
                 )}
               </AnimatePresence>

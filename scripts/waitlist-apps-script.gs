@@ -46,21 +46,48 @@ function book_() {
   return ss;
 }
 
-/** Run once from the editor: creates the tab and its header row. */
+var HEADERS = ['position', 'joined_at', 'name', 'email', 'phone', 'company', 'company_url', 'message', 'welcome_sent', 'last_newsletter'];
+// The layout before name/phone/company_url/message existed — needed only to
+// migrate a sheet created before this version, without losing its rows.
+var OLD_HEADERS = ['position', 'joined_at', 'email', 'role', 'company', 'welcome_sent', 'last_newsletter'];
+
+/** Run once from the editor: creates the tab, or migrates it to the current column layout. */
 function setupSheet() {
   var ss = book_();
   var sh = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
-  var headers = ['position', 'joined_at', 'email', 'role', 'company', 'welcome_sent', 'last_newsletter'];
+
   if (sh.getLastRow() === 0) {
-    sh.appendRow(headers);
-    sh.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    sh.appendRow(HEADERS);
+    sh.getRange(1, 1, 1, HEADERS.length).setFontWeight('bold');
     sh.setFrozenRows(1);
-  } else if (sh.getLastColumn() < headers.length) {
-    // Migrates a sheet made before the newsletter feature existed: adds the
-    // missing column without touching any row already on the list.
-    sh.getRange(1, sh.getLastColumn() + 1, 1, headers.length - sh.getLastColumn()).setValues([headers.slice(sh.getLastColumn())]).setFontWeight('bold');
+    return 'ready';
   }
-  return 'ready';
+
+  var current = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  if (current.join('|') === HEADERS.join('|')) return 'already up to date';
+
+  if (current.join('|') === OLD_HEADERS.join('|')) {
+    // Real migration, not a blind column append: the field ORDER changed
+    // (name/phone/company_url/message were inserted in the middle), so the
+    // old rows are re-mapped into the new layout rather than shifted.
+    var last = sh.getLastRow();
+    var old = last > 1 ? sh.getRange(2, 1, last - 1, OLD_HEADERS.length).getValues() : [];
+    var migrated = old.map(function (r) {
+      // old: [position, joined_at, email, role, company, welcome_sent, last_newsletter]
+      return [r[0], r[1], '', r[2], '', r[4], '', '', r[5], r[6]];
+    });
+    sh.clearContents();
+    sh.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]).setFontWeight('bold');
+    if (migrated.length) sh.getRange(2, 1, migrated.length, HEADERS.length).setValues(migrated);
+    sh.setFrozenRows(1);
+    return 'migrated ' + migrated.length + ' row(s) from the old layout';
+  }
+
+  // An unrecognised layout: extend it rather than guess at reordering it.
+  if (sh.getLastColumn() < HEADERS.length) {
+    sh.getRange(1, sh.getLastColumn() + 1, 1, HEADERS.length - sh.getLastColumn()).setValues([HEADERS.slice(sh.getLastColumn())]).setFontWeight('bold');
+  }
+  return 'extended an unrecognised layout — check the header row';
 }
 
 function sheet_() {
@@ -78,7 +105,7 @@ function json_(obj) {
 function findRow_(sh, email) {
   var last = sh.getLastRow();
   if (last < 2) return 0;
-  var col = sh.getRange(2, 3, last - 1, 1).getValues();   // column C = email
+  var col = sh.getRange(2, 4, last - 1, 1).getValues();   // column D = email
   for (var i = 0; i < col.length; i++) {
     if (String(col[i][0]).trim().toLowerCase() === email) return i + 2;
   }
@@ -105,8 +132,14 @@ function doPost(e) {
     var email = String(body.email || '').trim().toLowerCase();
     if (!email || email.indexOf('@') < 1) return json_({ ok: false, error: 'bad email' });
 
-    var role = String(body.role || 'other').trim();
+    // Everything else is deliberately unenforced here too — the form marks
+    // these required but never blocks on them, so a blank string is a valid,
+    // honest value rather than something to reject.
+    var name = String(body.name || '').trim();
+    var phone = String(body.phone || '').trim();
     var company = String(body.company || '').trim();
+    var companyUrl = String(body.companyUrl || '').trim();
+    var message = String(body.message || '').trim();
 
     // Already on the list → hand back the original position, never a second row.
     var existing = findRow_(sh, email);
@@ -117,9 +150,9 @@ function doPost(e) {
     var position = sh.getLastRow();          // header occupies row 1, so this is the next position
     var sent = false;
     if (SEND_WELCOME_EMAIL) {
-      try { sendWelcome_(email, position); sent = true; } catch (err) { sent = false; }
+      try { sendWelcome_(email, position, name); sent = true; } catch (err) { sent = false; }
     }
-    sh.appendRow([position, new Date(), email, role, company, sent ? 'yes' : 'no', '']);
+    sh.appendRow([position, new Date(), name, email, phone, company, companyUrl, message, sent ? 'yes' : 'no', '']);
 
     return json_({ ok: true, position: position, duplicate: false, count: Math.max(0, sh.getLastRow() - 1) });
   } catch (err) {
@@ -137,15 +170,16 @@ function doGet() {
 
 /* ── the welcome email ────────────────────────────────────────────────────── */
 
-function sendWelcome_(email, position) {
-  var opts = { name: FROM_NAME, htmlBody: welcomeHtml_(position) };
+function sendWelcome_(email, position, name) {
+  var opts = { name: FROM_NAME, htmlBody: welcomeHtml_(position, name) };
   if (REPLY_TO) opts.replyTo = REPLY_TO;
-  MailApp.sendEmail(email, "You're on the Wrapbox waitlist — #" + position, welcomeText_(position), opts);
+  MailApp.sendEmail(email, "You're on the Wrapbox waitlist — #" + position, welcomeText_(position, name), opts);
 }
 
-function welcomeText_(position) {
+function welcomeText_(position, name) {
+  var first = name ? String(name).trim().split(/\s+/)[0] : '';
   return [
-    "You're on the Wrapbox waitlist.",
+    first ? 'Hi ' + first + ',' : "You're on the Wrapbox waitlist.",
     '',
     'Position #' + position,
     '',
@@ -163,7 +197,8 @@ function welcomeText_(position) {
   ].join('\n');
 }
 
-function welcomeHtml_(position) {
+function welcomeHtml_(position, name) {
+  var first = name ? String(name).trim().split(/\s+/)[0] : '';
   var ink = '#111c35', muted = '#4a5061', faint = '#8a8e99', line = '#e6e5e0', paper = '#fafaf8';
   return '' +
   '<div style="margin:0;padding:32px 16px;background:' + paper + ';font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Helvetica,Arial,sans-serif;">' +
@@ -177,7 +212,7 @@ function welcomeHtml_(position) {
 
       // the position, as a receipt
       '<div style="padding:28px 28px 4px;">' +
-        '<div style="font-size:21px;font-weight:600;color:' + ink + ';letter-spacing:-0.02em;">You&rsquo;re on the list.</div>' +
+        '<div style="font-size:21px;font-weight:600;color:' + ink + ';letter-spacing:-0.02em;">' + (first ? 'Hi ' + first + ' &mdash; you&rsquo;re on the list.' : 'You&rsquo;re on the list.') + '</div>' +
         '<div style="margin-top:16px;border:1px solid ' + line + ';border-radius:12px;background:' + paper + ';padding:16px 18px;">' +
           '<div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:' + faint + ';">Waitlist position</div>' +
           '<div style="font-size:32px;font-weight:600;color:' + ink + ';letter-spacing:-0.03em;margin-top:2px;">#' + position + '</div>' +
@@ -313,20 +348,20 @@ function sendNewsletter() {
   var last = sh.getLastRow();
   if (last < 2) return 'nobody on the list yet';
 
-  var rows = sh.getRange(2, 1, last - 1, 7).getValues();  // A:G
+  var rows = sh.getRange(2, 1, last - 1, HEADERS.length).getValues();  // A:J
   var sent = 0, skipped = 0, failed = 0;
 
   for (var i = 0; i < rows.length; i++) {
     if (sent >= MAX_PER_RUN) break;
     var r = rows[i];
-    var email = String(r[2] || '').trim();
-    var already = String(r[6] || '');
+    var email = String(r[3] || '').trim();          // column D
+    var already = String(r[9] || '');                // column J = last_newsletter
     if (!email) continue;
     if (already === NEWSLETTER_VERSION) { skipped++; continue; }
 
     try {
       MailApp.sendEmail(email, NEWSLETTER.subject, newsletterText_(), { name: FROM_NAME, htmlBody: newsletterHtml_() });
-      sh.getRange(i + 2, 7).setValue(NEWSLETTER_VERSION);
+      sh.getRange(i + 2, 10).setValue(NEWSLETTER_VERSION);   // column J
       sent++;
     } catch (err) {
       failed++;
