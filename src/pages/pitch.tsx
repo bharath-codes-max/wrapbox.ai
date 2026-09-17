@@ -15,6 +15,7 @@ import type { Decision } from "../data/agents";
 import type { Rule } from "../data/contract";
 import { DecisionPill, Logo, cn } from "../components/ui";
 import { WrapboxLockup } from "../components/logo";
+import { Terminal } from "./auth";
 
 const TOTAL = 14;
 const EASE = [0.2, 0.7, 0.2, 1] as const; // the landing page's ease
@@ -784,6 +785,79 @@ function HowItWorks() {
   );
 }
 
+/* ============================ 06 · the product ============================ */
+// The product moment. The window on the right is the landing page's live
+// terminal — the real policy engine (src/lib/engine.ts evaluate()) deciding
+// an agent's actions as they happen, and answering anything an investor types.
+// The terminal is built in fixed pixels for the landing page; here it is
+// zoomed to the stage so its type sits at the deck's own scale.
+const WATCH: { cmd: string; what: string; d: Decision }[] = [
+  { cmd: "git push --force", what: "rewritten to --force-with-lease, then allowed", d: "CONSTRAIN" },
+  { cmd: ".env.production", what: "never read by an agent", d: "BLOCK" },
+  { cmd: "kubectl delete … -n prod", what: "held for oncall-sre, signed with a passkey", d: "REVIEW" },
+  { cmd: "everything ordinary", what: "automatic, and still on the record", d: "ALLOW" },
+];
+
+function TheProduct() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(1);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setZoom(Math.min(1.7, Math.max(0.85, e.contentRect.width / 760))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <Stage n={6}>
+      <div className="flex h-full flex-col px-[3.4cqw] pb-[2.6cqw] pt-[2.6cqw]">
+        <div className="grid flex-1 grid-cols-[0.78fr_1.22fr] items-center gap-[3.4cqw]">
+          <Par depth={3}>
+            <Reveal>
+              <div className="text-[0.95cqw] font-medium text-fg-3">The product</div>
+            </Reveal>
+            <Reveal delay={0.08}>
+              <h2 className="mt-[1.1cqw] text-[3.1cqw] font-medium leading-[1.06] tracking-[-0.04em] text-fg">
+                This is the real engine.<br />Not a mockup.
+              </h2>
+            </Reveal>
+            <Reveal delay={0.18}>
+              <p className="mt-[1.4cqw] max-w-[34ch] text-[1.15cqw] leading-relaxed text-fg-2">
+                The same policy engine the product ships, answering an agent&rsquo;s actions as it works. Type a command of your own — it will answer that too.
+              </p>
+            </Reveal>
+
+            <div className="mt-[2cqw]">
+              {WATCH.map((w, i) => (
+                <Reveal key={w.cmd} delay={0.32 + i * 0.1}>
+                  <div className="-mx-[0.9cqw] grid grid-cols-[auto_1fr] items-baseline gap-[0.9cqw] rounded-[0.6cqw] px-[0.9cqw] py-[0.7cqw] transition-colors hover:bg-surface-2">
+                    <DecisionPill d={w.d} size="sm" />
+                    <div className="text-[0.98cqw] leading-snug">
+                      <span className="font-mono text-fg">{w.cmd}</span>
+                      <span className="text-fg-3"> — {w.what}</span>
+                    </div>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+          </Par>
+
+          <Reveal delay={0.3}>
+            <Par depth={5}>
+              <Backdrop className="px-[1.8cqw] pb-[1.8cqw] pt-[2cqw]">
+                <div ref={ref} style={{ zoom }}>
+                  <Terminal chips height={300} />
+                </div>
+              </Backdrop>
+            </Par>
+          </Reveal>
+        </div>
+      </div>
+    </Stage>
+  );
+}
+
 /* ============================ the page ============================ */
 export function Pitch() {
   // The deck is light by design, the way the landing page is; pin the light
@@ -819,6 +893,7 @@ export function Pitch() {
       <TheProblem />
       <TheSolution />
       <HowItWorks />
+      <TheProduct />
     </div>
   );
 }
