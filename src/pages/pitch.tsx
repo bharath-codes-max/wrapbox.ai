@@ -8,8 +8,8 @@
 // agreed count so the counter reads as the whole deck from the first section.
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowDown } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { ArrowDown, ArrowRight, MessageSquare, Zap } from "lucide-react";
 import { SURFACES, runAction, type RunResult, type ScenarioAction, type Surface } from "../data/playground";
 import { DecisionPill, Logo, cn } from "../components/ui";
 import { WrapboxLockup } from "../components/logo";
@@ -27,10 +27,26 @@ const STAGE: CSSProperties = {
   containerType: "inline-size",
 };
 
+// Every stage carries mouse parallax: --mx/--my run -1..1 across the stage and
+// anything with .par drifts by its own --depth. Depth is in container units, so
+// the effect is identical at any screen size. Reduced motion pins it (index.css).
 function Stage({ n, children, className }: { n: number; children: ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const reduced = !!useReducedMotion();
+  const onMove = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (reduced) return;
+    const el = e.currentTarget;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--mx", (((e.clientX - r.left) / r.width) * 2 - 1).toFixed(3));
+    el.style.setProperty("--my", (((e.clientY - r.top) / r.height) * 2 - 1).toFixed(3));
+  };
+  const onLeave = (e: ReactMouseEvent<HTMLDivElement>) => {
+    e.currentTarget.style.setProperty("--mx", "0");
+    e.currentTarget.style.setProperty("--my", "0");
+  };
   return (
     <section id={`s${n}`} className="flex h-screen w-full snap-start snap-always items-center justify-center">
-      <div style={STAGE} className={cn("relative overflow-hidden rounded-[1.1cqw] border border-line bg-bg text-fg", className)}>
+      <div ref={ref} onMouseMove={onMove} onMouseLeave={onLeave} style={STAGE} className={cn("relative overflow-hidden rounded-[1.1cqw] border border-line bg-bg text-fg", className)}>
         {children}
         <div className="pointer-events-none absolute bottom-[2.1cqw] right-[2.6cqw] font-mono text-[0.9cqw] tabular-nums text-fg-3">
           {String(n).padStart(2, "0")} / {TOTAL}
@@ -61,6 +77,30 @@ function Window({ title, children, className }: { title: string; children: React
       {children}
     </div>
   );
+}
+
+/** Drifts with the cursor. `depth` is how far, in container units. */
+function Par({ depth = 6, children, className, style }: { depth?: number; children: ReactNode; className?: string; style?: CSSProperties }) {
+  return (
+    <div className={cn("par", className)} style={{ "--depth": depth, ...style } as CSSProperties}>
+      {children}
+    </div>
+  );
+}
+
+/** A card that comes alive under the cursor — a lift and a brightened edge, never a shadow. */
+function HoverCard({ children, className, depth = 0 }: { children: ReactNode; className?: string; depth?: number }) {
+  const reduced = !!useReducedMotion();
+  const card = (
+    <motion.div
+      whileHover={reduced ? undefined : { y: -4, scale: 1.012 }}
+      transition={{ type: "spring", stiffness: 260, damping: 22 }}
+      className={cn("group h-full rounded-[0.8cqw] border border-line bg-surface transition-colors hover:border-line-strong", className)}
+    >
+      {children}
+    </motion.div>
+  );
+  return depth ? <Par depth={depth} className="h-full">{card}</Par> : card;
 }
 
 function Reveal({ children, delay = 0, className }: { children: ReactNode; delay?: number; className?: string }) {
@@ -211,6 +251,136 @@ function Cover() {
   );
 }
 
+/* ============================ 02 · the shift ============================ */
+// The argument: the interface changed from advice to action. Same request, two
+// years apart — in 2023 the model tells you the command, in 2026 the agent runs
+// it. Every figure here is sourced; an investor can check each one.
+const SHIFT_STATS: { value: string; label: string; source: string }[] = [
+  { value: "46%", label: "of the code developers ship is now written by AI", source: "AI code generation statistics, 2026" },
+  { value: "86%", label: "of organisations already run coding agents against production code", source: "Agentic coding in production, Q1 2026" },
+  { value: "97M", label: "monthly MCP downloads — the plumbing that hands agents the tools", source: "MCP project, Mar 2026 · 100K at launch" },
+];
+
+const AGENT_CALLS: { call: string; arg: string; effect: string }[] = [
+  { call: "Bash", arg: 'psql -c "DELETE FROM sessions WHERE last_seen < now() - 90"', effect: "ran against production" },
+  { call: "mcp__stripe__create_refund", arg: 'charge=ch_3Q7f… amount=50000', effect: "moved $500.00" },
+  { call: "Write", arg: ".github/workflows/deploy.yml", effect: "changed how you ship" },
+];
+
+function TheShift() {
+  const reduced = !!useReducedMotion();
+  return (
+    <Stage n={2}>
+      <div className="flex h-full flex-col px-[3.4cqw] pb-[2.6cqw] pt-[2.6cqw]">
+        <div className="grid flex-1 grid-cols-[0.92fr_1.08fr] items-center gap-[3.4cqw]">
+          {/* the claim */}
+          <div>
+            <Reveal>
+              <div className="text-[0.95cqw] font-medium text-fg-3">The shift</div>
+            </Reveal>
+            <Reveal delay={0.08}>
+              <h2 className="mt-[1.1cqw] text-[3.1cqw] font-medium leading-[1.06] tracking-[-0.04em] text-fg">
+                Agents stopped talking <br />and started <span className="relative inline-block">
+                  doing.
+                  <motion.span
+                    initial={{ scaleX: 0 }}
+                    whileInView={{ scaleX: 1 }}
+                    viewport={{ once: true }}
+                    transition={reduced ? { duration: 0.01 } : { duration: 0.7, delay: 0.7, ease: EASE }}
+                    className="prism-swatch absolute -bottom-[0.1cqw] left-0 h-[0.28cqw] w-full origin-left rounded-full"
+                  />
+                </span>
+              </h2>
+            </Reveal>
+            <Reveal delay={0.18}>
+              <p className="mt-[1.5cqw] max-w-[38ch] text-[1.2cqw] leading-relaxed text-fg-2">
+                Two years ago a model suggested the command and a human ran it. Today the agent runs it itself — with write access to the repo, the database and the money.
+              </p>
+            </Reveal>
+
+            <div className="mt-[2.2cqw] grid gap-[0.9cqw]">
+              {SHIFT_STATS.map((st, i) => (
+                <Reveal key={st.value} delay={0.3 + i * 0.1}>
+                  <HoverCard depth={3 + i} className="flex items-center gap-[1.2cqw] px-[1.3cqw] py-[1cqw]">
+                    <span className="w-[5.2cqw] shrink-0 text-[2.1cqw] font-medium leading-none tracking-[-0.04em] text-fg tnum">{st.value}</span>
+                    <span className="min-w-0">
+                      <span className="block text-[0.98cqw] leading-snug text-fg-2">{st.label}</span>
+                      <span className="mt-[0.25cqw] block text-[0.78cqw] text-fg-3">{st.source}</span>
+                    </span>
+                  </HoverCard>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+
+          {/* the proof: one request, two years apart */}
+          <Reveal delay={0.25}>
+            <Par depth={5}>
+              <Backdrop className="px-[1.9cqw] pb-[1.9cqw] pt-[2.2cqw]">
+                <Window title="the same request, two years apart">
+                  <div className="bg-white">
+                    {/* 2023 */}
+                    <div className="px-[1.4cqw] pb-[1.2cqw] pt-[1.2cqw]">
+                      <div className="flex items-center gap-[0.6cqw]">
+                        <MessageSquare className="size-[0.95cqw] text-black/35" />
+                        <span className="font-mono text-[0.78cqw] uppercase tracking-[0.12em] text-black/40">2023 · assistant</span>
+                        <span className="ml-auto rounded-full bg-black/[0.06] px-[0.7cqw] py-[0.2cqw] text-[0.75cqw] text-black/50">suggests</span>
+                      </div>
+                      <div className="mt-[0.8cqw] rounded-[0.6cqw] bg-[#f6f5f1] px-[1cqw] py-[0.85cqw]">
+                        <div className="text-[0.92cqw] text-black/60">Sure — here&rsquo;s the command you&rsquo;d run:</div>
+                        <div className="mt-[0.4cqw] truncate font-mono text-[0.88cqw] text-black/80">psql -c &quot;DELETE FROM sessions WHERE last_seen &lt; now() - 90&quot;</div>
+                      </div>
+                      <div className="mt-[0.7cqw] text-[0.85cqw] text-black/45">A human read it, thought about it, and typed it.</div>
+                    </div>
+
+                    <div className="relative h-[1.9cqw] border-y border-line bg-[#faf9f6]">
+                      <motion.span
+                        initial={{ opacity: 0, y: -6 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={reduced ? { duration: 0.01 } : { duration: 0.5, delay: 0.9 }}
+                        className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-[0.5cqw] whitespace-nowrap text-[0.78cqw] font-medium text-black/45"
+                      >
+                        two years <ArrowRight className="size-[0.85cqw]" /> the human step disappeared
+                      </motion.span>
+                    </div>
+
+                    {/* 2026 */}
+                    <div className="px-[1.4cqw] pb-[1.3cqw] pt-[1.2cqw]">
+                      <div className="flex items-center gap-[0.6cqw]">
+                        <Zap className="size-[0.95cqw] text-[#1848ff]" />
+                        <span className="font-mono text-[0.78cqw] uppercase tracking-[0.12em] text-black/55">2026 · agent</span>
+                        <span className="ml-auto rounded-full bg-[#1848ff]/10 px-[0.7cqw] py-[0.2cqw] text-[0.75cqw] font-medium text-[#1848ff]">executes</span>
+                      </div>
+                      <div className="mt-[0.8cqw] grid gap-[0.5cqw]">
+                        {AGENT_CALLS.map((c, i) => (
+                          <motion.div
+                            key={c.call}
+                            initial={{ opacity: 0, x: -10 }}
+                            whileInView={{ opacity: 1, x: 0 }}
+                            viewport={{ once: true }}
+                            transition={reduced ? { duration: 0.01 } : { duration: 0.45, delay: 1.1 + i * 0.16, ease: EASE }}
+                            className="flex items-baseline gap-[0.7cqw] rounded-[0.5cqw] bg-[#f6f5f1] px-[1cqw] py-[0.65cqw]"
+                          >
+                            <span className="shrink-0 font-mono text-[0.88cqw] font-semibold text-[#111c35]">{c.call}</span>
+                            <span className="min-w-0 flex-1 truncate font-mono text-[0.85cqw] text-black/55">{c.arg}</span>
+                            <span className="shrink-0 whitespace-nowrap text-[0.8cqw] font-medium text-[#d6224a]">{c.effect}</span>
+                          </motion.div>
+                        ))}
+                      </div>
+                      <div className="mt-[0.9cqw] text-[0.85cqw] text-black/45">No human read any of them. Nobody was asked.</div>
+                    </div>
+                  </div>
+                </Window>
+              </Backdrop>
+            </Par>
+          </Reveal>
+        </div>
+      </div>
+    </Stage>
+  );
+}
+
 /* ============================ the page ============================ */
 export function Pitch() {
   // The deck is light by design, the way the landing page is; pin the light
@@ -242,6 +412,7 @@ export function Pitch() {
   return (
     <div className="h-screen snap-y snap-mandatory overflow-y-auto bg-bg scroll-thin" style={{ fontFamily: "var(--font-sans)" }}>
       <Cover />
+      <TheShift />
     </div>
   );
 }

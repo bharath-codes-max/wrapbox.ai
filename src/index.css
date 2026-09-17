@@ -411,6 +411,14 @@ h3 {
   opacity: max(0.25, calc(1 - var(--sy, 0) * 0.0016));
   will-change: transform, opacity;
 }
+/* Pitch stages: the same mouse parallax in container units, so the drift is
+   identical whatever size the stage is rendered at. */
+.par {
+  transform: translate3d(calc(var(--mx, 0) * var(--depth, 6) * 0.1cqw), calc(var(--my, 0) * var(--depth, 6) * 0.08cqw), 0);
+  transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+  will-change: transform;
+}
+
 /* Mouse parallax: --mx/--my run -1..1 across the hovered element */
 .parallax-mouse {
   transform: translate3d(calc(var(--mx, 0) * var(--depth, 10) * 1px), calc(var(--my, 0) * var(--depth, 10) * 0.8px), 0);
@@ -441,7 +449,8 @@ h3 {
   .wb-card,
   .wb-card:hover,
   .parallax-head,
-  .parallax-mouse {
+  .parallax-mouse,
+  .par {
     transform: none;
     transition: none;
   }
