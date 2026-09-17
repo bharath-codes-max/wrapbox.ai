@@ -9,8 +9,10 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowRight, MessageSquare, Zap } from "lucide-react";
-import { SURFACES, runAction, type RunResult, type ScenarioAction, type Surface } from "../data/playground";
+import { ArrowDown, ArrowRight } from "lucide-react";
+import { INTENT_CONTRACT, SURFACES, activeRules, runAction, type RunResult, type ScenarioAction, type Surface } from "../data/playground";
+import type { Decision } from "../data/agents";
+import type { Rule } from "../data/contract";
 import { DecisionPill, Logo, cn } from "../components/ui";
 import { WrapboxLockup } from "../components/logo";
 
@@ -280,16 +282,7 @@ function TheShift() {
             </Reveal>
             <Reveal delay={0.08}>
               <h2 className="mt-[1.1cqw] text-[3.1cqw] font-medium leading-[1.06] tracking-[-0.04em] text-fg">
-                Agents stopped talking <br />and started <span className="relative inline-block">
-                  doing.
-                  <motion.span
-                    initial={{ scaleX: 0 }}
-                    whileInView={{ scaleX: 1 }}
-                    viewport={{ once: true }}
-                    transition={reduced ? { duration: 0.01 } : { duration: 0.7, delay: 0.7, ease: EASE }}
-                    className="prism-swatch absolute -bottom-[0.1cqw] left-0 h-[0.28cqw] w-full origin-left rounded-full"
-                  />
-                </span>
+                Agents stopped talking <br />and started doing.
               </h2>
             </Reveal>
             <Reveal delay={0.18}>
@@ -322,7 +315,6 @@ function TheShift() {
                     {/* 2023 */}
                     <div className="px-[1.4cqw] pb-[1.2cqw] pt-[1.2cqw]">
                       <div className="flex items-center gap-[0.6cqw]">
-                        <MessageSquare className="size-[0.95cqw] text-black/35" />
                         <span className="font-mono text-[0.78cqw] uppercase tracking-[0.12em] text-black/40">2023 · assistant</span>
                         <span className="ml-auto rounded-full bg-black/[0.06] px-[0.7cqw] py-[0.2cqw] text-[0.75cqw] text-black/50">suggests</span>
                       </div>
@@ -348,9 +340,8 @@ function TheShift() {
                     {/* 2026 */}
                     <div className="px-[1.4cqw] pb-[1.3cqw] pt-[1.2cqw]">
                       <div className="flex items-center gap-[0.6cqw]">
-                        <Zap className="size-[0.95cqw] text-[#1848ff]" />
                         <span className="font-mono text-[0.78cqw] uppercase tracking-[0.12em] text-black/55">2026 · agent</span>
-                        <span className="ml-auto rounded-full bg-[#1848ff]/10 px-[0.7cqw] py-[0.2cqw] text-[0.75cqw] font-medium text-[#1848ff]">executes</span>
+                        <span className="ml-auto rounded-full bg-[#111c35] px-[0.7cqw] py-[0.2cqw] text-[0.75cqw] font-medium text-white">executes</span>
                       </div>
                       <div className="mt-[0.8cqw] grid gap-[0.5cqw]">
                         {AGENT_CALLS.map((c, i) => (
@@ -364,7 +355,7 @@ function TheShift() {
                           >
                             <span className="shrink-0 font-mono text-[0.88cqw] font-semibold text-[#111c35]">{c.call}</span>
                             <span className="min-w-0 flex-1 truncate font-mono text-[0.85cqw] text-black/55">{c.arg}</span>
-                            <span className="shrink-0 whitespace-nowrap text-[0.8cqw] font-medium text-[#d6224a]">{c.effect}</span>
+                            <span className="shrink-0 whitespace-nowrap text-[0.8cqw] font-medium text-[#111c35]">{c.effect}</span>
                           </motion.div>
                         ))}
                       </div>
@@ -478,6 +469,158 @@ function TheProblem() {
   );
 }
 
+/* ============================ 04 · the solution ============================ */
+// The solution is shown, not described: the product in the landing page's
+// framed window — the intent contract on the left exactly as the admin wrote
+// it, compiled into rules by the real engine; on the right four real actions,
+// one per outcome, decided by that same engine. Nothing on the stage is typed
+// in by hand: rule counts, verdicts, rewrites and approvers all come from
+// runAction() / activeRules().
+const SOLUTION_IDS = ["pg-cli-tests", "pg-cursor-force", "pg-db-update", "pg-cli-dotenv"];
+const D_ORDER: Decision[] = ["BLOCK", "REVIEW", "CONSTRAIN", "ALLOW"];
+const RANK: Record<Decision, number> = { ALLOW: 1, CONSTRAIN: 2, REVIEW: 3, BLOCK: 4 };
+/** The strongest decision a rule can reach — read off the rule, the way the playground does. */
+function ruleDecision(r: Rule): Decision {
+  const c: Decision[] = [];
+  if (r.decision) c.push(r.decision);
+  for (const t of r.tiers ?? []) c.push(t.decision);
+  for (const e of r.escalations ?? []) c.push(e.decision);
+  if (r.forbid?.length) c.push("BLOCK");
+  return c.length ? c.sort((a, b) => RANK[b] - RANK[a])[0] : "ALLOW";
+}
+
+function TheSolution() {
+  const reduced = !!useReducedMotion();
+  const rules = useMemo(() => activeRules(), []);
+  const groups = useMemo(() => D_ORDER.map((d) => ({ d, n: rules.filter((r) => ruleDecision(r) === d).length })), [rules]);
+  const decided = useMemo(
+    () =>
+      SOLUTION_IDS.map((id) => {
+        const surface = SURFACES.find((x) => x.actions.some((a) => a.id === id))!;
+        const action = surface.actions.find((a) => a.id === id)!;
+        return { surface, action, run: runAction(action) };
+      }),
+    [],
+  );
+
+  return (
+    <Stage n={4}>
+      <div className="flex h-full flex-col px-[3.4cqw] pb-[2.4cqw] pt-[2.6cqw]">
+        <div className="grid grid-cols-[1.15fr_0.85fr] items-end gap-[3cqw]">
+          <div>
+            <Reveal>
+              <div className="text-[0.95cqw] font-medium text-fg-3">The solution</div>
+            </Reveal>
+            <Reveal delay={0.08}>
+              <h2 className="mt-[0.9cqw] text-[2.9cqw] font-medium leading-[1.06] tracking-[-0.04em] text-fg">
+                One intent contract. Every agent.<br />Checked milliseconds before it runs.
+              </h2>
+            </Reveal>
+          </div>
+          <Reveal delay={0.18}>
+            <p className="max-w-[36ch] text-[1.1cqw] leading-relaxed text-fg-2">
+              The admin writes the rules once, in plain English. Wrapbox compiles them and answers every action an agent takes — allow, constrain, review or block — and signs a receipt for each.
+            </p>
+          </Reveal>
+        </div>
+
+        {/* the product, real */}
+        <Reveal delay={0.28} className="mt-[1.8cqw] flex-1">
+          <Par depth={4} className="h-full">
+            <Backdrop className="h-full px-[1.8cqw] pb-[1.8cqw] pt-[1.8cqw]">
+              <Window title="app.wrapbox.ai · intent contract → decisions" className="h-full">
+                <div className="grid h-[calc(100%-2.1cqw)] grid-cols-[0.82fr_1.18fr]">
+                  {/* the contract, as written */}
+                  <div className="flex flex-col bg-[#faf9f6] px-[1.5cqw] py-[1.3cqw] text-[#111c35]">
+                    <div className="flex items-baseline justify-between">
+                      <span className="font-mono text-[0.75cqw] uppercase tracking-[0.12em] text-black/45">Intent contract</span>
+                      <span className="font-mono text-[0.72cqw] text-black/35">v1 · published</span>
+                    </div>
+                    <div className="mt-[1cqw] space-y-[0.6cqw]">
+                      {INTENT_CONTRACT.map((line) => (
+                        <p key={line} className="text-[1.12cqw] font-medium leading-[1.4] tracking-[-0.01em]">{line}</p>
+                      ))}
+                    </div>
+                    <div className="mt-auto pt-[1.2cqw]">
+                      <div className="text-[0.82cqw] text-black/50">Compiled into {rules.length} rules</div>
+                      <div className="mt-[0.6cqw] grid grid-cols-4 gap-[0.5cqw]">
+                        {groups.map((g, i) => (
+                          <motion.div
+                            key={g.d}
+                            initial={{ opacity: 0, y: 8 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={reduced ? { duration: 0.01 } : { duration: 0.4, delay: 0.7 + i * 0.08, ease: EASE }}
+                            className="rounded-[0.5cqw] bg-white px-[0.7cqw] py-[0.6cqw]"
+                          >
+                            <div className="text-[1.5cqw] font-medium leading-none tracking-[-0.03em] tnum">{g.n}</div>
+                            <div className="mt-[0.35cqw] font-mono text-[0.62cqw] uppercase tracking-[0.1em] text-black/45">{g.d}</div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* four real actions, one per outcome */}
+                  <div className="flex flex-col bg-white px-[1.5cqw] py-[1.3cqw] text-[#111c35]">
+                    <div className="flex items-baseline justify-between">
+                      <span className="font-mono text-[0.75cqw] uppercase tracking-[0.12em] text-black/45">Decisions</span>
+                      <span className="font-mono text-[0.72cqw] text-black/35">real engine · &lt;1 ms each</span>
+                    </div>
+                    <div className="mt-[0.9cqw] flex flex-1 flex-col gap-[0.55cqw]">
+                      {decided.map(({ surface, action, run }, i) => (
+                        <motion.div
+                          key={action.id}
+                          initial={{ opacity: 0, x: 12 }}
+                          whileInView={{ opacity: 1, x: 0 }}
+                          viewport={{ once: true }}
+                          transition={reduced ? { duration: 0.01 } : { duration: 0.45, delay: 0.55 + i * 0.14, ease: EASE }}
+                          whileHover={reduced ? undefined : { x: 3 }}
+                          className="-mx-[0.8cqw] grid grid-cols-[auto_1fr_auto] items-center gap-x-[0.9cqw] rounded-[0.6cqw] px-[0.8cqw] py-[0.7cqw] transition-colors hover:bg-[#f6f5f1]"
+                        >
+                          {surface.logo ? <Logo name={surface.logo} size={24} rounded="rounded-[6px]" /> : <span className="size-[1.6cqw] rounded-[6px] bg-black/10" />}
+                          <div className="min-w-0">
+                            <div className="flex items-baseline gap-[0.6cqw]">
+                              <span className="shrink-0 text-[0.92cqw] font-semibold">{run.agent}</span>
+                              <span className="truncate font-mono text-[0.82cqw] text-black/55">{statementOf(action)}</span>
+                            </div>
+                            <div className="mt-[0.25cqw] truncate text-[0.82cqw] text-black/55">
+                              {run.rewritten ? <>rewritten → <span className="font-mono">{run.rewritten}</span></> : run.verdict.approvers ? `${run.verdict.title} · ${run.verdict.approvers}${run.verdict.quorum ? ` × ${run.verdict.quorum}` : ""}` : run.verdict.title}
+                            </div>
+                          </div>
+                          <DecisionPill d={run.verdict.decision} />
+                        </motion.div>
+                      ))}
+                      <div className="mt-auto flex items-center gap-[0.5cqw] pt-[0.9cqw] text-[0.8cqw] text-black/50">
+                        <span className="size-[0.5cqw] rounded-full bg-allow live-dot" />
+                        Every verdict above was produced by the engine when this page loaded — the same engine the product ships.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Window>
+            </Backdrop>
+          </Par>
+        </Reveal>
+
+        {/* three facts, typographic */}
+        <div className="mt-[1.6cqw] grid grid-cols-3 gap-[2cqw]">
+          {[
+            ["Plain English in", "Two sentences from the admin become sixteen rules. No policy language to learn."],
+            ["Every agent, every surface", "Claude Code, Cursor, browsers, MCP tools, SaaS — one contract governs them all."],
+            ["A signed receipt, every time", "Each decision is signed and hash-chained, so an auditor gets the whole story."],
+          ].map(([t, b], i) => (
+            <Reveal key={t} delay={0.9 + i * 0.08}>
+              <div className="text-[0.95cqw] font-medium text-fg">{t}</div>
+              <div className="mt-[0.3cqw] text-[0.85cqw] leading-relaxed text-fg-2">{b}</div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </Stage>
+  );
+}
+
 /* ============================ the page ============================ */
 export function Pitch() {
   // The deck is light by design, the way the landing page is; pin the light
@@ -511,6 +654,7 @@ export function Pitch() {
       <Cover />
       <TheShift />
       <TheProblem />
+      <TheSolution />
     </div>
   );
 }
