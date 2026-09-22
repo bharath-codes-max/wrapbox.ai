@@ -21,6 +21,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 /** Addresses nobody should be able to sign up as — these bounce and pollute the sheet. */
 const BAD_DOMAINS = ["example.com", "test.com", "localhost"];
 
+/** What a submission can be. "demo" is what the landing page sends today;
+ *  "waitlist" is kept so historic and other entry points still record correctly. */
+const ALLOWED_TYPES = ["demo", "waitlist"];
+
 interface ScriptReply {
   ok?: boolean;
   position?: number;
@@ -61,7 +65,7 @@ export default async function handler(req: { method?: string; body?: unknown }, 
   if (req.method !== "POST") return res.status(405).json({ error: "method not allowed" });
   if (!url) return res.status(501).json({ error: "The waitlist is not connected yet.", configured: false });
 
-  let body: { name?: string; email?: string; phone?: string; role?: string; company?: string; companyUrl?: string; message?: string } = {};
+  let body: { type?: string; name?: string; email?: string; phone?: string; role?: string; company?: string; companyUrl?: string; message?: string } = {};
   try {
     body = typeof req.body === "string" ? JSON.parse(req.body) : ((req.body ?? {}) as typeof body);
   } catch {
@@ -82,8 +86,15 @@ export default async function handler(req: { method?: string; body?: unknown }, 
   const companyUrl = (body.companyUrl ?? "").toString().trim().slice(0, 300);
   const message = (body.message ?? "").toString().trim().slice(0, 1000);
 
+  // What the person actually asked for, so the sheet can tell a demo request
+  // apart from an early-access signup. Constrained to a known set rather than
+  // passed through, so the column can never be filled with arbitrary text; an
+  // unrecognised value is recorded as "demo" (the landing page's only CTA).
+  const requested = (body.type ?? "").toString().trim().toLowerCase();
+  const type = ALLOWED_TYPES.includes(requested) ? requested : "demo";
+
   try {
-    const out = await callScript(url, { action: "join", name, email, phone, role, company, companyUrl, message });
+    const out = await callScript(url, { action: "join", type, name, email, phone, role, company, companyUrl, message });
     if (!out.ok || typeof out.position !== "number") {
       return res.status(502).json({ error: out.error ? "The waitlist is having a moment. Try again shortly." : "Could not reach the waitlist." });
     }

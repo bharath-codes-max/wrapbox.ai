@@ -55,11 +55,14 @@ function book_() {
 // Current layout. Role is free text (a searched-or-typed job title from the
 // form), not the old fixed enum — there is no newsletter feature anymore, so
 // there is no last_newsletter column either.
-var HEADERS = ['position', 'joined_at', 'name', 'email', 'phone', 'role', 'company', 'company_url', 'message', 'welcome_sent'];
+var HEADERS = ['position', 'joined_at', 'name', 'email', 'phone', 'role', 'company', 'company_url', 'message', 'welcome_sent', 'request_type'];
 // Two earlier layouts this migrates FROM, oldest first, so a sheet at either
 // point gets remapped into HEADERS rather than corrupted by a blind append.
 var HEADERS_V1 = ['position', 'joined_at', 'email', 'role', 'company', 'welcome_sent', 'last_newsletter'];
 var HEADERS_V2 = ['position', 'joined_at', 'name', 'email', 'phone', 'company', 'company_url', 'message', 'welcome_sent', 'last_newsletter'];
+// V3 is the layout before request_type existed. Rows written then were all
+// early-access signups, so they migrate with request_type = 'waitlist'.
+var HEADERS_V3 = ['position', 'joined_at', 'name', 'email', 'phone', 'role', 'company', 'company_url', 'message', 'welcome_sent'];
 
 /** Run once from the editor: creates the tab, or migrates it to the current column layout. */
 function setupSheet() {
@@ -84,13 +87,19 @@ function setupSheet() {
     // old: [position, joined_at, email, role, company, welcome_sent, last_newsletter]
     var oldV1 = last > 1 ? sh.getRange(2, 1, last - 1, HEADERS_V1.length).getValues() : [];
     migrated = oldV1.map(function (r) {
-      return [r[0], r[1], '', r[2], '', r[3], r[4], '', '', r[5]];
+      return [r[0], r[1], '', r[2], '', r[3], r[4], '', '', r[5], 'waitlist'];
     });
   } else if (current.join('|') === HEADERS_V2.join('|')) {
     // old: [position, joined_at, name, email, phone, company, company_url, message, welcome_sent, last_newsletter]
     var oldV2 = last > 1 ? sh.getRange(2, 1, last - 1, HEADERS_V2.length).getValues() : [];
     migrated = oldV2.map(function (r) {
-      return [r[0], r[1], r[2], r[3], r[4], '', r[5], r[6], r[7], r[8]];
+      return [r[0], r[1], r[2], r[3], r[4], '', r[5], r[6], r[7], r[8], 'waitlist'];
+    });
+  } else if (current.join('|') === HEADERS_V3.join('|')) {
+    // old: everything except request_type. Those rows predate demo requests.
+    var oldV3 = last > 1 ? sh.getRange(2, 1, last - 1, HEADERS_V3.length).getValues() : [];
+    migrated = oldV3.map(function (r) {
+      return [r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], 'waitlist'];
     });
   }
 
@@ -160,6 +169,9 @@ function doPost(e) {
     var company = String(body.company || '').trim();
     var companyUrl = String(body.companyUrl || '').trim();
     var message = String(body.message || '').trim();
+    // What was asked for. The API already constrains this to a known set; the
+    // fallback here keeps a direct/legacy call from writing an empty column.
+    var requestType = String(body.type || '').trim().toLowerCase() || 'waitlist';
 
     // Already on the list → hand back the original position, never a second row.
     var existing = findRow_(sh, email);
@@ -174,7 +186,7 @@ function doPost(e) {
     // a false failure even though the signup itself succeeded. The welcome
     // email is sent a few seconds later by sendPendingWelcomes(), on a timer
     // this file's own setupSheet() installs — see below.
-    sh.appendRow([position, new Date(), name, email, phone, role, company, companyUrl, message, SEND_WELCOME_EMAIL ? 'pending' : 'no']);
+    sh.appendRow([position, new Date(), name, email, phone, role, company, companyUrl, message, SEND_WELCOME_EMAIL ? 'pending' : 'no', requestType]);
 
     return json_({ ok: true, position: position, duplicate: false, count: Math.max(0, sh.getLastRow() - 1) });
   } catch (err) {

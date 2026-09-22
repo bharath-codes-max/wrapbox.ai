@@ -116,8 +116,8 @@ function Nav() {
             </button>
           ))}
         </nav>
-        <button onClick={() => scrollTo("waitlist")} className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-full bg-[#111113] px-4 text-[13.5px] font-medium text-white transition-[filter] hover:brightness-125">
-          Join the waitlist
+        <button onClick={() => scrollTo("demo")} className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-full bg-[#111113] px-4 text-[13.5px] font-medium text-white transition-[filter] hover:brightness-125">
+          Request a Demo
         </button>
       </Container>
     </header>
@@ -220,11 +220,11 @@ function Hero() {
               The runtime authorization layer for AI agents. Every risky action — from Claude Code to your Stripe MCP — is checked against one intent contract, milliseconds before it runs.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <button onClick={() => scrollTo("waitlist")} className="inline-flex h-11 items-center gap-2 rounded-full bg-[#111113] px-5 text-[14.5px] font-medium text-white transition-[filter] hover:brightness-125">
-                Join the waitlist <ArrowRight className="size-4" />
+              <button onClick={() => scrollTo("demo")} className="inline-flex h-11 items-center gap-2 rounded-full bg-[#111113] px-5 text-[14.5px] font-medium text-white transition-[filter] hover:brightness-125">
+                Request a Demo <ArrowRight className="size-4" />
               </button>
               <button onClick={() => scrollTo("decide")} className="inline-flex h-11 items-center gap-2 rounded-full border border-line bg-surface px-5 text-[14.5px] font-medium text-fg hover:border-line-strong">
-                See how it works
+                See How It Works
               </button>
             </div>
           </motion.div>
@@ -769,13 +769,16 @@ function Pricing() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Waitlist                                                            */
+/* Request a demo                                                      */
 /* ------------------------------------------------------------------ */
 
 // Everything here is answered by /api/waitlist, which writes to a real sheet and
-// sends the confirmation mail. Field names are used by a real person on the
-// other end, not stored to power a vanity counter — so this page never shows
-// a "N teams on the list" figure; it always shows the plain form.
+// sends the confirmation mail. The endpoint keeps its original path because the
+// deployed function and its WAITLIST_SHEET_URL secret are already wired to that
+// name in production; the request carries type:"demo" so demo requests are
+// tracked as their own thing in the sheet rather than blurred into signups.
+// Field names are used by a real person on the other end, not stored to power a
+// vanity counter — so this page never shows a "N teams on the list" figure.
 //
 // Company is a real-company lookup (Clearbit's free, keyless autocomplete —
 // no account, no CORS issue, returns name + domain) with a manual fallback
@@ -842,7 +845,7 @@ function useJobTitleSuggestions(query: string, enabled: boolean) {
   return all.filter((t) => t.toLowerCase().includes(q)).slice(0, 7);
 }
 
-function Waitlist() {
+function RequestDemo() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -894,7 +897,9 @@ function Waitlist() {
       const r = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, email, phone, role, company, companyUrl, message }),
+        // `type` is what makes a demo request trackable as its own thing in the
+        // sheet rather than being indistinguishable from an early-access signup.
+        body: JSON.stringify({ type: "demo", name, email, phone, role, company, companyUrl, message }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok || !d?.ok) {
@@ -904,7 +909,7 @@ function Waitlist() {
       }
       setDone({ position: d.position, duplicate: !!d.duplicate, email });
     } catch {
-      setError("We couldn't reach the waitlist. Check your connection and try again.");
+      setError("We couldn't send your request. Check your connection and try again.");
     }
     setState("idle");
   };
@@ -912,12 +917,12 @@ function Waitlist() {
   const fieldClass = "mt-2 h-11 w-full rounded-xl border border-line bg-bg px-3.5 text-[14.5px] text-fg outline-none transition-colors placeholder:text-fg-3 focus:border-line-strong";
 
   return (
-    <section id="waitlist" className="scroll-mt-20 py-16 sm:py-24">
+    <section id="demo" className="scroll-mt-20 py-16 sm:py-24">
       <Container className="grid items-start gap-10 lg:grid-cols-[1fr_1.15fr]">
         <SectionHead
-          eyebrow="Early access"
-          title="Get Wrapbox before your agents get ambitious."
-          body="We're opening access in small batches, security and platform teams first. Join the list and we'll send a workspace link with a ten-minute setup for your first agent."
+          eyebrow="Request a demo"
+          title="See Wrapbox stop a real agent action."
+          body="Tell us which agents you run and we'll walk you through a live workspace on your own traffic — one intent contract, one blocked action, the signed receipt behind it. Usually 30 minutes, with an engineer rather than a sales deck."
         />
 
         <Reveal delay={0.06}>
@@ -929,16 +934,21 @@ function Waitlist() {
                   <motion.div key="done" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.4, ease: [0.2, 0.7, 0.2, 1] }}>
                     <div className="flex items-center gap-2 text-[13px] font-semibold text-allow">
                       <ShieldCheck className="size-4" />
-                      {done.duplicate ? "You were already on the list." : "You're on the list."}
+                      {done.duplicate ? "We already have your request." : "Demo request received."}
                     </div>
 
+                    {/* A receipt, the way every other Wrapbox answer is — but a demo
+                        request has no queue number, so it states what happens next
+                        rather than inventing a position to display. */}
                     <div className="mt-4 rounded-xl border border-line bg-bg p-5">
-                      <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-fg-3">Waitlist position</div>
-                      <div className="mt-0.5 text-[40px] font-medium leading-none tracking-[-0.04em] text-fg tnum">#{done.position}</div>
+                      <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-fg-3">What happens next</div>
+                      <div className="mt-1.5 text-[14.5px] leading-relaxed text-fg">
+                        An engineer replies within one business day to book 30 minutes.
+                      </div>
                       <div className="mt-3 flex items-start gap-1.5 border-t border-line pt-3 text-[12.5px] text-fg-2">
                         <Mail className="mt-0.5 size-3.5 shrink-0 text-fg-3" />
                         <span>
-                          {done.duplicate ? "Your original confirmation went to " : "Confirmation sent to "}
+                          {done.duplicate ? "We'll reply to " : "Confirmation sent to "}
                           <span className="font-mono text-[11.5px] text-fg">{done.email}</span>
                           {done.duplicate ? "." : " — check spam if it's not there in a minute."}
                         </span>
@@ -946,10 +956,10 @@ function Waitlist() {
                     </div>
 
                     <p className="mt-4 text-[13.5px] leading-relaxed text-fg-2">
-                      We open access in batches and email from the same address, so replying gets you a person rather than a queue. Tell us which agents you run and we'll prioritise those integrations.
+                      We email from the same address, so replying gets you a person rather than a queue. Tell us which agents you run and we'll shape the demo around those.
                     </p>
                     <button onClick={() => scrollTo("decide")} className="mt-4 inline-flex items-center gap-1.5 text-[14px] font-medium text-fg transition-[gap] hover:gap-2.5">
-                      Try the policy engine while you wait <ArrowRight className="size-4" />
+                      Try the policy engine now <ArrowRight className="size-4" />
                     </button>
                   </motion.div>
                 ) : (
@@ -1139,11 +1149,11 @@ function Waitlist() {
                     >
                       {state === "sending" ? (
                         <>
-                          <Loader2 className="size-4 animate-spin" /> Adding you…
+                          <Loader2 className="size-4 animate-spin" /> Sending…
                         </>
                       ) : (
                         <>
-                          Join the waitlist <ArrowRight className="size-4" />
+                          Request a Demo <ArrowRight className="size-4" />
                         </>
                       )}
                     </button>
@@ -1156,7 +1166,7 @@ function Waitlist() {
                       )}
                     </AnimatePresence>
 
-                    <p className="mt-4 text-[12.5px] text-fg-3">No newsletter. One email when your access opens.</p>
+                    <p className="mt-4 text-[12.5px] text-fg-3">No newsletter. One reply from an engineer to book a time.</p>
                   </motion.form>
                 )}
               </AnimatePresence>
@@ -1226,8 +1236,8 @@ function FinalCta() {
                 Put your agents on a <span className="text-[#1b0f33] [text-shadow:none]">permit</span> today.
               </h2>
               <p className="mt-4 text-[17px] font-medium text-white/90">Every risky action gets a decision, a reason and a signature — before it runs.</p>
-              <button onClick={() => scrollTo("waitlist")} className="mt-8 inline-flex h-11 items-center gap-2 rounded-full bg-white px-5 text-[14.5px] font-medium text-[#111113] transition-transform hover:-translate-y-0.5">
-                Join the waitlist <ArrowRight className="size-4" />
+              <button onClick={() => scrollTo("demo")} className="mt-8 inline-flex h-11 items-center gap-2 rounded-full bg-white px-5 text-[14.5px] font-medium text-[#111113] transition-transform hover:-translate-y-0.5">
+                Request a Demo <ArrowRight className="size-4" />
               </button>
             </div>
           </Backdrop>
@@ -1241,7 +1251,7 @@ function Footer() {
   const cols: [string, string[]][] = [
     ["Product", ["Intent contract", "Approvals", "Evidence", "MCP gateway", "Pricing"]],
     ["Integrations", ["Claude Code", "Cursor", "Codex", "LangGraph", "Agentforce"]],
-    ["Company", ["Waitlist", "About", "Careers", "Security", "Contact"]],
+    ["Company", ["Request a demo", "About", "Careers", "Security", "Contact"]],
     ["Legal", ["Terms", "Privacy", "DPA"]],
   ];
   return (
@@ -1257,7 +1267,7 @@ function Footer() {
             <ul className="mt-3 space-y-2 text-[13px] text-fg-3">
               {items.map((x) => (
                 <li key={x}>
-                  <button onClick={() => (x === "Pricing" ? scrollTo("pricing") : x === "Waitlist" ? scrollTo("waitlist") : undefined)} className="hover:text-fg transition-colors">
+                  <button onClick={() => (x === "Pricing" ? scrollTo("pricing") : x === "Request a demo" ? scrollTo("demo") : undefined)} className="hover:text-fg transition-colors">
                     {x}
                   </button>
                 </li>
@@ -1329,7 +1339,7 @@ export function Landing() {
       <Numbers />
       <UseCases />
       <Pricing />
-      <Waitlist />
+      <RequestDemo />
       <Faq />
       <FinalCta />
       <Footer />
