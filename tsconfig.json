@@ -1,21 +1,42 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["vite/client"],
+    "types": [
+      "vite/client"
+    ],
     "isolatedModules": true,
     "paths": {
-      "@wrapbox/sdk": ["./src/sdk/wrapbox.ts"],
-      "@wrapbox/verify": ["./src/sdk/verify.ts"],
-      "@wrapbox/openai": ["./src/sdk/openai.ts"],
-      "@wrapbox/langgraph": ["./src/sdk/langgraph.ts"]
+      "@wrapbox/sdk": [
+        "./src/sdk/wrapbox.ts"
+      ],
+      "@wrapbox/verify": [
+        "./src/sdk/verify.ts"
+      ],
+      "@wrapbox/openai": [
+        "./src/sdk/openai.ts"
+      ],
+      "@wrapbox/langgraph": [
+        "./src/sdk/langgraph.ts"
+      ]
     }
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "src/lib/intent/regression/run.ts",
+    "src/lib/intent/regression/properties.ts",
+    "src/lib/intent/regression/report.ts"
+  ]
 }
