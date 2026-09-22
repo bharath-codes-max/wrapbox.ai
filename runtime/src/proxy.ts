@@ -1,12 +1,23 @@
 /**
- * Universal network gate — a local HTTP proxy on 127.0.0.1 that every wrapped
- * agent's traffic is routed through (via HTTP_PROXY / HTTPS_PROXY set by the
- * shim). Enforces the same cached ruleset the check hook uses, and writes a
- * signed receipt for every allow/block decision.
+ * Universal network gate — a local HTTP proxy on 127.0.0.1.
  *
- * NO TLS MITM — for HTTPS we inspect the CONNECT line's host string, decide,
- * then either pipe raw sockets through or close with 403. Hostname-level
- * control is the guarantee. Content inspection is the Gateway's job.
+ * Reached two ways. Wrapped agents get HTTP_PROXY/HTTPS_PROXY from the shim;
+ * everything else on the machine — a browser opened from the Dock, an IDE, a
+ * desktop app — arrives because `sysproxy` pointed the OS proxy here. The
+ * second path is what makes this browser-independent: no per-browser
+ * integration, and no requirement that Wrapbox launched the program.
+ *
+ * TWO LEVELS OF ENFORCEMENT, chosen per host:
+ *
+ *   proxy  — hostname only. The CONNECT target is judged, then raw bytes are
+ *            tunnelled. Used for hosts we decline to decrypt (an employee's
+ *            bank) and when inspection is switched off.
+ *
+ *   mitm   — TLS is terminated here, the body is buffered, classified and
+ *            judged BEFORE any upstream connection exists. This is what sees
+ *            prompt text and file uploads. See mitm.ts.
+ *
+ * Both write a signed receipt through the same evaluator the hook uses.
  */
 
 import http from "node:http";
@@ -18,6 +29,12 @@ import { URL } from "node:url";
 import { loadConfig, PATHS, type Config } from "./config.js";
 import { loadCachedRules, evaluate, applyProjectFilter, type ToolCall, type Rule } from "./policy.js";
 import { makeReceipt, appendToSpool } from "./receipts.js";
+import { interceptTls, shouldInspect, closeMitm, type EgressRequest, type EgressVerdict } from "./mitm.js";
+import { caExists } from "./ca.js";
+import { describeClassification, RUNTIME_CONTENT_KINDS, RUNTIME_FINDING_LABELS } from "./classify.js";
+import { describeTransform, type TransformReport } from "./transform.js";
+import { identifyClient, identifyService, isSignificant, isNoisePath } from "./identify.js";
+import { openApproval, readApproval } from "./api.js";
 
 export const DEFAULT_PROXY_PORT = Number(process.env.WRAPBOX_PROXY_PORT || 4180);
 
@@ -78,7 +95,17 @@ interface Decision {
   matchedRule?: Rule | null;
 }
 
-function decide(host: string, port: number, agent: string): Decision {
+/**
+ * @param deferModelApiGuard  True when this flow is about to be TLS-inspected.
+ *   The unknown-process → model-API guard exists because, with only a hostname
+ *   to go on, an unattributed process reaching a model provider is the most
+ *   suspicious thing we can see. Once we can read the body that reasoning no
+ *   longer applies: a browser opened from the Dock is ALWAYS an unattributed
+ *   process, and blocking it at CONNECT would mean never inspecting any
+ *   browser traffic — the exact case this product exists to govern. So when
+ *   inspection is available, the guard stands down and the content decides.
+ */
+function decide(host: string, port: number, agent: string, deferModelApiGuard = false): Decision {
   const cached = loadCachedRules();
   if (!cached) {
     return {
@@ -106,7 +133,7 @@ function decide(host: string, port: number, agent: string): Decision {
   // and the connection is blocked with the loud reason. This is the whole
   // point of the guard: default-allow policies must not silently open every
   // model provider to unattributed local processes.
-  if (isModelApi && unknownProc) {
+  if (isModelApi && unknownProc && !deferModelApiGuard) {
     if (r.effect === "allow" && matched && ruleTargetsHost(matched)) {
       return { effect: "allow", reason: matched.name || r.reason, rule_id: matched.id, degraded: !cached.fresh, pulled_at: cached.pulled_at };
     }
@@ -144,7 +171,18 @@ function ruleTargetsHost(rule: { condition: unknown }): boolean {
 }
 
 function writeReceipt(cfg: Config, host: string, port: number, agent: string, session: string, d: Decision, enforcement: "proxy") {
+  // Never record loopback: 127.0.0.1 / localhost / ::1 / .local are how the
+  // daemon reaches its OWN Control Plane and how a dev tests locally. Writing
+  // receipts for them fills the trail with noise about the security tool
+  // talking to itself, which reads as "3 pages of unknown → localhost:4100"
+  // and buries the actual decisions.
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host.endsWith(".local")) return;
   try {
+    // Attribute what we can from the hostname alone. Connect receipts fire
+    // before the TLS handshake, so there is no User-Agent to read the client
+    // from — but the destination is enough to render a Claude / ChatGPT icon
+    // instead of the generic terminal one, which is what a reader needs.
+    const service = identifyService(host);
     const receipt = makeReceipt(cfg, {
       agent,
       session,
@@ -157,10 +195,335 @@ function writeReceipt(cfg: Config, host: string, port: number, agent: string, se
       ruleset_pulled_at: d.pulled_at,
       enforcement,
       degraded: d.degraded,
+      ...(service.id ? { service: service.id, service_label: service.label } : {}),
     });
     appendToSpool(receipt);
   } catch (err) {
     console.error(`proxy: failed to write receipt: ${(err as Error).message}`);
+  }
+}
+
+/**
+ * Content-level decision, taken once TLS has been terminated and the whole
+ * body is in hand — but before any upstream connection exists.
+ *
+ * The facts handed to the engine are deliberately ABOUT the content rather
+ * than the content itself: kinds, finding labels, filenames, byte count. A
+ * rule therefore reads "content_kinds contains secret", which is true of a
+ * service we have integrated and equally true of one that launched this
+ * morning. It also keeps the secret out of the receipt.
+ */
+function decideEgress(
+  cfg: Config,
+  r: EgressRequest,
+  agent: string,
+  session: string,
+  recordAll = false,
+): EgressVerdict {
+  const cached = loadCachedRules();
+  if (!cached) {
+    const v: EgressVerdict = {
+      effect: "block",
+      reason: "No cached ruleset — proxy failing closed",
+      rule_id: null,
+      degraded: true,
+      pulled_at: null,
+    };
+    writeEgressReceipt(cfg, r, agent, session, v);
+    return v;
+  }
+
+  const rules = applyProjectFilter(cached.rules, undefined);
+  const call: ToolCall = {
+    tool_name: "network.egress",
+    tool_input: {
+      host: r.host,
+      port: r.port,
+      method: r.method,
+      path: r.path,
+      agent,
+      // Trusted device identity (§5): the daemon runs on an enrolled device with
+      // a signing key, so it can attribute the DEVICE for every request it sees.
+      // This is a real, verifiable signal — unlike the User-Agent, which is only
+      // used for the evidence label. It does NOT identify the human at the
+      // keyboard; a rule scoped to a user or group stays DEGRADED (see the
+      // capability self-description) until an enterprise IdP is connected.
+      device_id: cfg.device_id,
+      // Arrays stringify to a comma-joined list, so `contains` works on them
+      // in a rule condition without any special-casing in the engine.
+      content_kinds: r.classification.kinds,
+      findings: r.classification.findings.map((f) => f.label),
+      filenames: r.classification.filenames,
+      bytes: r.classification.bytes,
+      has_file_upload: r.classification.hasFileUpload,
+      uninspected: r.uninspected,
+    },
+  };
+
+  let d = evaluate(call, rules);
+  let matched = d.matched_rule_id ? cached.rules.find((x) => x.id === d.matched_rule_id) : undefined;
+
+  // ── FAIL-CLOSED INSPECTION GATE (§4) ──
+  // The body is in a format we could not fully read (a PDF, a generic archive,
+  // an over-limit payload, a body that refused bounded decompression). We must
+  // not let it ride an ALLOW just because our finding set came back empty. Ask
+  // the ONE engine a worst-case question: IF this body contained every class we
+  // know about, would any protection fire? If yes, we cannot clear it — block.
+  // If no protection would ever apply to this destination, allowing it is
+  // consistent with policy, so an uninspectable body is not punished needlessly.
+  let failClosed = false;
+  if (!r.classification.inspectable) {
+    const worst = evaluate(
+      { ...call, tool_input: { ...call.tool_input, content_kinds: RUNTIME_CONTENT_KINDS, findings: RUNTIME_FINDING_LABELS, has_file_upload: true } },
+      rules,
+    );
+    if (worst.effect === "block" || worst.effect === "review" || worst.effect === "constrain") {
+      failClosed = true;
+      d = { ...worst, effect: "block" };
+      matched = worst.matched_rule_id ? cached.rules.find((x) => x.id === worst.matched_rule_id) : undefined;
+    }
+  }
+
+  const detected = describeClassification(r.classification);
+  const baseReason = failClosed
+    ? `cannot inspect ${r.classification.format} content (${r.classification.inspectReason ?? "unreadable format"}) and a protection could apply — failing closed`
+    : (matched?.name || d.reason);
+  const withFindings = r.classification.findings.length ? `${baseReason} — ${detected}` : baseReason;
+  // Surface a degraded rule's coverage note so Evidence states the known
+  // bypass alongside what was enforced — never letting a partial-coverage
+  // enforcement read as complete.
+  const note = (matched as { coverageNote?: string | null } | undefined)?.coverageNote;
+  const reason = note ? `${withFindings} · ${note}` : withFindings;
+
+  const v: EgressVerdict = {
+    // Every effect the engine can return travels through intact. An unknown
+    // one falls to block, which is the fail-closed default — but allow,
+    // constrain and review each reach the enforcement path that implements
+    // them. Collapsing constrain here is what would turn a masking rule into
+    // a silent block (or worse, a silent allow) without anyone noticing.
+    effect: d.effect === "allow" ? "allow"
+      : d.effect === "review" ? "review"
+      : d.effect === "constrain" ? "constrain"
+      : "block",
+    // CONSTRAIN needs to know WHAT to protect. Carried from the matched rule;
+    // mitm refuses to forward if it is missing.
+    ...(d.effect === "constrain" ? { constraint: d.constraint ?? null } : {}),
+    reason: r.uninspected ? `${baseReason} — payload too large to inspect` : reason,
+    rule_id: matched?.id ?? null,
+    degraded: !cached.fresh,
+    pulled_at: cached.pulled_at,
+  };
+
+  // Attribution for the evidence trail — never an input to the decision above.
+  const client = identifyClient(r.headers["user-agent"] as string | undefined);
+  const service = identifyService(r.host);
+
+  // Background chatter is counted, not recorded. Writing a signed receipt for
+  // every telemetry ping buries the handful of decisions a human needs to see.
+  const worthRecording = isSignificant({
+    effect: v.effect,
+    contentKinds: r.classification.kinds,
+    hasFileUpload: r.classification.hasFileUpload,
+    service,
+    bytes: r.classification.bytes,
+    method: r.method,
+    recordAll,
+  }) && !(v.effect === "allow" && isNoisePath(r.path));
+
+  // A CONSTRAIN receipt has to say WHAT was protected, and that is only known
+  // once the transform has run. Writing it here would produce an unqualified
+  // "constrain" with no fields — indistinguishable from a rule that matched
+  // but masked nothing. So the write is deferred to onTransform, and the
+  // caller supplies the report.
+  if (v.effect === "constrain") {
+    pendingConstrain = worthRecording ? { r, agent, session, v, client, service } : null;
+    return v;
+  }
+
+  if (!worthRecording) {
+    skipped++;
+  } else if (shouldRecordAgain(`e|${r.host}|${r.method}|${v.effect}|${v.reason}|${r.classification.kinds.join(",")}`)) {
+    writeEgressReceipt(cfg, r, agent, session, v, client, service);
+  }
+
+  return v;
+}
+
+/**
+ * Collapse repeated identical decisions.
+ *
+ * During a misconfiguration — a contract with no catch-all ALLOW, say — every
+ * connection on the machine is refused, and a browser retries hard. That wrote
+ * hundreds of byte-identical "blocked claude.ai:443" receipts in seconds,
+ * burying everything else and making the trail useless exactly when someone
+ * needs to read it.
+ *
+ * So the same host + effect + reason inside the window is counted, not
+ * re-recorded. The first one is always written, and the suppressed count is
+ * reported — the event is never hidden, only de-duplicated.
+ */
+const DEDUPE_WINDOW_MS = 60_000;
+const lastSeen = new Map<string, number>();
+let suppressed = 0;
+
+function shouldRecordAgain(key: string): boolean {
+  const now = Date.now();
+  const prev = lastSeen.get(key);
+  if (prev !== undefined && now - prev < DEDUPE_WINDOW_MS) {
+    suppressed++;
+    return false;
+  }
+  lastSeen.set(key, now);
+  // Keep the map from growing without bound on a long-running daemon.
+  if (lastSeen.size > 2000) {
+    for (const [k, t] of lastSeen) if (now - t > DEDUPE_WINDOW_MS) lastSeen.delete(k);
+  }
+  return true;
+}
+
+export function takeSuppressedCount(): number {
+  const n = suppressed;
+  suppressed = 0;
+  return n;
+}
+
+/** Routine allows we chose not to record, reported by the daemon periodically. */
+let skipped = 0;
+export function takeSkippedCount(): number {
+  const n = skipped;
+  skipped = 0;
+  return n;
+}
+
+/**
+ * Hold a request while a human answers in the dashboard.
+ *
+ * Polls rather than holds a socket open to the Control Plane, so a restart of
+ * either side cannot strand the request. Every failure path denies: an
+ * unreachable control plane, an expired window and a rejection all mean the
+ * bytes do not leave.
+ */
+async function awaitApproval(
+  cfg: Config,
+  r: EgressRequest,
+  v: EgressVerdict,
+  client: { id: string; label: string },
+  service: { id: string; label: string; ai: boolean },
+): Promise<{ ok: boolean; reason: string }> {
+  const detected = describeClassification(r.classification);
+  let opened: { id: string; expires_in_ms: number };
+  try {
+    opened = await openApproval(cfg, {
+      org_id: cfg.org_id,
+      rule_id: v.rule_id,
+      rule_name: v.reason,
+      summary: `${client.label} → ${service.label || r.host}: ${r.method} ${r.path.slice(0, 80)}`,
+      destination: r.host,
+      method: r.method,
+      path: r.path.slice(0, 300),
+      client_label: client.label,
+      service_label: service.label || r.host,
+      content_kinds: r.classification.kinds,
+      findings: r.classification.findings.map((f) => f.label),
+      bytes: r.classification.bytes,
+    });
+  } catch (err) {
+    return { ok: false, reason: `${v.reason} — could not reach an approver (${(err as Error).message})` };
+  }
+
+  console.log(`review: holding ${r.method} ${r.host}${r.path.slice(0, 60)} — ${detected} — waiting for a human`);
+
+  const deadline = Date.now() + Math.min(opened.expires_in_ms, 120_000);
+  while (Date.now() < deadline) {
+    await new Promise((res) => setTimeout(res, 1500));
+    try {
+      const a = await readApproval(cfg, opened.id);
+      if (a.state === "approved") {
+        console.log(`review: APPROVED by ${a.decided_by ?? "admin"} — forwarding`);
+        return { ok: true, reason: `approved by ${a.decided_by ?? "admin"}` };
+      }
+      if (a.state === "rejected") {
+        console.log(`review: REJECTED by ${a.decided_by ?? "admin"}`);
+        return { ok: false, reason: `${v.reason} — rejected by ${a.decided_by ?? "admin"}` };
+      }
+      if (a.state === "expired") break;
+    } catch {
+      // Keep polling; a transient failure is not an answer either way.
+    }
+  }
+  console.log("review: no answer in time — denied");
+  return { ok: false, reason: `${v.reason} — nobody approved it in time` };
+}
+
+/**
+ * The constrain receipt waiting for its transform report.
+ *
+ * Safe as a single slot because mitm calls decide() and then onTransform()
+ * synchronously inside one request handler — nothing can interleave between
+ * them. It is cleared on consumption so a transform that never happens cannot
+ * attach its report to a later request.
+ */
+let pendingConstrain: {
+  r: EgressRequest; agent: string; session: string; v: EgressVerdict;
+  client?: { id: string; label: string }; service?: { id: string; label: string; ai: boolean };
+} | null = null;
+
+/** Called by mitm once a CONSTRAIN transform has run. */
+function recordConstrain(cfg: Config, report: TransformReport): void {
+  const p = pendingConstrain;
+  pendingConstrain = null;
+  if (!p) return;
+  if (!shouldRecordAgain(`c|${p.r.host}|${p.r.method}|${p.v.reason}|${report.fields.join(",")}`)) return;
+  writeEgressReceipt(cfg, p.r, p.agent, p.session, p.v, p.client, p.service, report);
+}
+
+function writeEgressReceipt(
+  cfg: Config,
+  r: EgressRequest,
+  agent: string,
+  session: string,
+  v: EgressVerdict,
+  client?: { id: string; label: string },
+  service?: { id: string; label: string; ai: boolean },
+  transform?: TransformReport,
+): void {
+  try {
+    const receipt = makeReceipt(cfg, {
+      agent,
+      session,
+      tool_name: "network.egress",
+      tool_input: {
+        host: r.host,
+        port: r.port,
+        method: r.method,
+        path: r.path,
+        content_kinds: r.classification.kinds,
+        findings: r.classification.findings.map((f) => f.label),
+        filenames: r.classification.filenames,
+        bytes: r.classification.bytes,
+        // What the CONSTRAIN transform actually protected. Field NAMES and
+        // COUNTS only — putting the protected values in the evidence trail
+        // would defeat the entire point of masking them.
+        ...(transform ? {
+          protected_fields: transform.fields,
+          protected_counts: transform.protected.map((x) => `${x.kind.toLowerCase()}:${x.count}`),
+          protected_total: transform.total,
+          ...(transform.lookalikes ? { neutralised_tokens: transform.lookalikes } : {}),
+        } : {}),
+      },
+      target: `${r.method} ${r.host}${r.path}`,
+      effect: v.effect,
+      reason: transform ? `${v.reason} — protected ${describeTransform(transform)}` : v.reason,
+      rule_id: v.rule_id,
+      ruleset_pulled_at: v.pulled_at,
+      enforcement: "mitm",
+      degraded: v.degraded,
+      ...(client ? { client: client.id, client_label: client.label } : {}),
+      ...(service?.id ? { service: service.id, service_label: service.label } : {}),
+    });
+    appendToSpool(receipt);
+  } catch (err) {
+    console.error(`proxy: failed to write egress receipt: ${(err as Error).message}`);
   }
 }
 
@@ -178,12 +541,40 @@ function parseHostPort(hostHeader: string, defaultPort: number): { host: string;
 export interface ProxyHandle {
   server: http.Server;
   port: number;
+  /** True when TLS interception is active for inspectable hosts. */
+  inspecting: boolean;
   stop: () => Promise<void>;
 }
 
-export async function startProxy(port: number = DEFAULT_PROXY_PORT): Promise<ProxyHandle> {
+export interface ProxyOptions {
+  port?: number;
+  /**
+   * Terminate TLS and inspect request bodies. Requires the CA to exist and be
+   * trusted; without it every HTTPS handshake would fail, so we refuse to turn
+   * inspection on rather than silently break the machine's network.
+   */
+  inspect?: boolean;
+  /** Extra host patterns that must never be decrypted, beyond the defaults. */
+  noInspect?: RegExp[];
+  /** Record a receipt for EVERY inspected request, not only the risky ones. */
+  recordAll?: boolean;
+}
+
+export async function startProxy(opts: ProxyOptions | number = {}): Promise<ProxyHandle> {
+  const o: ProxyOptions = typeof opts === "number" ? { port: opts } : opts;
+  const port = o.port ?? DEFAULT_PROXY_PORT;
+  const noInspect = o.noInspect ?? [];
+  const recordAll = Boolean(o.recordAll);
+
   const cfg = loadConfig();
   if (!cfg) throw new Error("proxy: not enrolled — cannot sign receipts (run: wrapboxd enroll ...)");
+
+  // Inspection is only safe once the CA exists. Turning it on without one
+  // would break every HTTPS connection on the device.
+  const inspecting = Boolean(o.inspect) && caExists();
+  if (o.inspect && !inspecting) {
+    console.error("proxy: inspection requested but no CA found — falling back to hostname-level enforcement");
+  }
 
   // Universal safety net — one connection must never crash the daemon.
   //
@@ -264,13 +655,52 @@ export async function startProxy(port: number = DEFAULT_PROXY_PORT): Promise<Pro
     }
   });
   const handleConnect = (req: http.IncomingMessage, clientSocket: Duplex, head: Buffer) => {
-    // HTTPS tunnel — never MITM. Inspect the CONNECT target host string only.
     const { host, port } = parseHostPort(req.url || "", 443);
     const session = readProxySession();
     const agent = session?.agent || "unknown";
     const sid = session?.session || "";
-    const d = decide(host, port, agent);
-    writeReceipt(cfg, host, port, agent, sid, d, "proxy");
+
+    // Hostname-level decision first — it is cheap, and a host that is banned
+    // outright should never reach the cost of a TLS handshake.
+    const canInspect = inspecting && shouldInspect(host, noInspect);
+    const d = decide(host, port, agent, canInspect);
+
+    // "allow" here is the CONNECT-level decision (host only). A constrain rule
+    // matches on CONTENT, which is invisible until the body is decrypted — so
+    // the session must be inspected for the transform to ever run.
+    const willInspect = canInspect && d.effect === "allow";
+
+    // Record the connection-level decision only when it IS the decision and it
+    // mattered. When we are about to inspect, the per-request receipts carry
+    // the real verdicts. And a plain allow to a non-AI host we never decrypt
+    // (an OS update server, a CDN) is background chatter, not evidence.
+    if (d.effect === "block") {
+      if (shouldRecordAgain(`c|${host}|block|${d.reason}`)) {
+        writeReceipt(cfg, host, port, agent, sid, d, "proxy");
+      }
+    } else if (!willInspect && identifyService(host).ai) {
+      if (shouldRecordAgain(`c|${host}|allow|${d.reason}`)) {
+        writeReceipt(cfg, host, port, agent, sid, d, "proxy");
+      }
+    } else if (!willInspect) {
+      skipped++;
+    }
+
+    if (willInspect) {
+      try {
+        clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+      } catch {
+        return; // client vanished between CONNECT and our reply
+      }
+      interceptTls(clientSocket, head, {
+        host,
+        port,
+        decide: (r) => decideEgress(cfg, r, agent, sid, recordAll),
+        onTransform: (report) => recordConstrain(cfg, report),
+        review: (r, v) => awaitApproval(cfg, r, v, identifyClient(r.headers["user-agent"] as string | undefined), identifyService(r.host)),
+      });
+      return;
+    }
 
     if (d.effect === "block") {
       const safeReason = d.reason.replace(/[^\x20-\x7e]/g, "?");
@@ -303,6 +733,9 @@ export async function startProxy(port: number = DEFAULT_PROXY_PORT): Promise<Pro
     server.listen(port, "127.0.0.1", () => { server.off("error", reject); resolve(); });
   });
 
-  const stop = () => new Promise<void>((resolve) => server.close(() => resolve()));
-  return { server, port, stop };
+  const stop = async () => {
+    await closeMitm();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  };
+  return { server, port, inspecting, stop };
 }

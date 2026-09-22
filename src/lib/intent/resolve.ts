@@ -22,7 +22,7 @@ import {
   type IntentClause, type EnforcementBinding, type EnforcementPlane, type BindingStatus,
   type Predicate, type PredicateSet, type Decision, handlerDef,
 } from "./schema";
-import { NETWORK_RUNTIME, bridgeClasses, networkCapabilities, futurePlaneCapabilities } from "./runtime";
+import { NETWORK_RUNTIME, bridgeClass, bridgeClasses, networkCapabilities, futurePlaneCapabilities } from "./runtime";
 import { observableKinds } from "./detectors";
 import { requirements, deriveStatus, classFamily, type StatusVerdict } from "./capabilities";
 import { resolveNames, resolveGroup, resolveCategory, hostInRegex, hostNotInRegex, type HostResolution } from "./destinations";
@@ -288,7 +288,17 @@ function effectiveDecisionFor(clause: IntentClause, plane: PlaneFrame): Decision
     if (!(plane.handlers.includes("*") || plane.handlers.includes(h.handler))) return false;
     if (h.handler === "data.transform") {
       const p = h.params as { fields?: unknown; classes?: unknown };
-      return (Array.isArray(p.fields) && p.fields.length > 0) || (Array.isArray(p.classes) && p.classes.length > 0);
+      // A named field/column can be masked whatever its class. A class-only mask
+      // is executable ONLY for classes the runtime tokenizer can actually MASK —
+      // the PII value types (email/phone/card/…). A class the runtime can only
+      // DETECT, not mask (financial, phi, legal, a secret), is NOT maskable:
+      // transform.ts drops it and fails closed. Detection ≠ transformation, so
+      // the compiler must not read a mask over an unmaskable class as CONSTRAIN
+      // while the runtime BLOCKs it. Both layers now agree.
+      const hasFields = Array.isArray(p.fields) && p.fields.length > 0;
+      const classes = Array.isArray(p.classes) ? (p.classes as string[]) : [];
+      const anyMaskable = classes.some((c) => bridgeClass(c) === "pii");
+      return hasFields || anyMaskable;
     }
     return true;
   });

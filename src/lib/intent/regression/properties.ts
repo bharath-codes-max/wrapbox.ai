@@ -8,11 +8,12 @@
  * the same laws immediately and lean). Run: npx tsx …/properties.ts
  */
 
+import { readFileSync } from "node:fs";
 import { validateSurface, type SurfaceClause } from "../validate";
 import { compileToRule, compileContract } from "../compile";
 import { requirements, deriveStatus, type Status } from "../capabilities";
 import { networkCapabilities, futurePlaneCapabilities, NETWORK_RUNTIME } from "../runtime";
-import { DETERMINISTIC_DETECTOR } from "../detectors";
+import { detectableFamilies } from "../detectors";
 import type { IntentClause, Decision } from "../schema";
 
 let pass = 0, fail = 0;
@@ -130,14 +131,36 @@ for (const surface of space()) {
   check("unknown-capability-not-enforced", verdict.status !== "enforced", verdict.status as Status);
 }
 
-// LAW 10 — DRIFT GUARD: the compiler's declared content classes must exactly
-// equal what the runtime classifier emits. If classify.ts adds a kind and this
-// detector is not updated, this fails — preventing silent vocabulary drift.
+// LAW 10 — DRIFT GUARD against the RUNTIME SELF-DESCRIPTION (§7). The runtime is
+// the source of truth: `wrapboxd capabilities` emits what the daemon really
+// observes/classifies, snapshotted to runtime.capabilities.json. The compiler's
+// mirror MUST match it — otherwise the compiler could call a class ENFORCED that
+// the daemon cannot detect. Regenerate the snapshot when the runtime changes.
 {
-  const RUNTIME_KINDS = ["secret", "source_code", "pii", "credential_file"]; // = classify.ts ContentKind
-  const declared = [...DETERMINISTIC_DETECTOR.classes].sort();
-  check("no-classifier-drift", JSON.stringify(declared) === JSON.stringify([...RUNTIME_KINDS].sort()), `${declared} vs ${RUNTIME_KINDS}`);
-  check("observed-fields-match", [...NETWORK_RUNTIME.fields].every((f) => typeof f === "string"));
+  type Desc = { plane: string; observes: string[]; classifiers: { family: string; local: boolean }[]; handlers: string[] };
+  const snap = JSON.parse(readFileSync(new URL("./runtime.capabilities.json", import.meta.url), "utf8")) as Desc[];
+  const net = snap.find((d) => d.plane === "network")!;
+
+  // Content families: the compiler's detector registry must equal the runtime's
+  // locally-deployed classifier families exactly.
+  const runtimeFamilies = [...new Set(net.classifiers.filter((c) => c.local).map((c) => c.family))].sort();
+  const compilerFamilies = [...detectableFamilies()].sort();
+  check("classifier-mirror-matches-runtime", JSON.stringify(compilerFamilies) === JSON.stringify(runtimeFamilies), `compiler ${compilerFamilies} vs runtime ${runtimeFamilies}`);
+
+  // NETWORK_RUNTIME.contentKinds is the compiler's coarse-vocabulary mirror; it
+  // must not drift from the runtime's classifier families either.
+  const compilerContentKinds = [...NETWORK_RUNTIME.contentKinds].sort();
+  check("contentkinds-mirror-matches-runtime", JSON.stringify(compilerContentKinds) === JSON.stringify(runtimeFamilies), `contentKinds ${compilerContentKinds} vs runtime ${runtimeFamilies}`);
+
+  // Observed fields the compiler pins predicates on must all be fields the
+  // runtime actually populates (compiler ⊆ runtime observes).
+  const runtimeObserves = new Set(net.observes);
+  const unbacked = [...NETWORK_RUNTIME.fields].filter((f) => !runtimeObserves.has(f));
+  check("observed-fields-backed-by-runtime", unbacked.length === 0, `compiler fields not in runtime self-description: ${unbacked}`);
+
+  // The one transform handler the compiler treats as executable must be one the
+  // runtime reports it executes.
+  check("handler-mirror-matches-runtime", net.handlers.includes("data.transform"), `runtime handlers: ${net.handlers}`);
 }
 
 console.log(`\nPROPERTY TESTS — PASS ${pass} / FAIL ${fail}`);

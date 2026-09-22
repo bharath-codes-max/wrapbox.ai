@@ -70,7 +70,37 @@ export const DETERMINISTIC_DETECTOR: ContentDetector = {
   local: true,
 };
 
+/**
+ * The multi-signal detectors that became real in the runtime (classifiers.ts):
+ * financial, PHI, legal and confidential. Each MIRRORS a deployed daemon
+ * detector — registering it here is what moves an existing FINANCIAL/PHI/LEGAL/
+ * CONFIDENTIAL contract from UNDERSTOOD_ONLY to ENFORCED, with no compiler
+ * change (§1, §2, §27). A drift-guard test asserts this mirror matches the
+ * runtime's self-description, so the compiler can never claim a family the
+ * daemon does not actually detect.
+ */
+export const FINANCIAL_DETECTOR: ContentDetector = {
+  id: "wrapbox.financial", version: "1.0.0", classes: ["financial"],
+  supportedMimeTypes: ["*"], supportedEncodings: ["utf-8", "gzip", "deflate", "br"], local: true,
+};
+export const PHI_DETECTOR: ContentDetector = {
+  id: "wrapbox.phi", version: "1.0.0", classes: ["phi"],
+  supportedMimeTypes: ["*"], supportedEncodings: ["utf-8", "gzip", "deflate", "br"], local: true,
+};
+export const LEGAL_DETECTOR: ContentDetector = {
+  id: "wrapbox.legal", version: "1.0.0", classes: ["legal"],
+  supportedMimeTypes: ["*"], supportedEncodings: ["utf-8", "gzip", "deflate", "br"], local: true,
+};
+export const CONFIDENTIAL_DETECTOR: ContentDetector = {
+  id: "wrapbox.confidential", version: "1.0.0", classes: ["confidential"],
+  supportedMimeTypes: ["*"], supportedEncodings: ["utf-8", "gzip", "deflate", "br"], local: true,
+};
+
 registerDetector(DETERMINISTIC_DETECTOR);
+registerDetector(FINANCIAL_DETECTOR);
+registerDetector(PHI_DETECTOR);
+registerDetector(LEGAL_DETECTOR);
+registerDetector(CONFIDENTIAL_DETECTOR);
 
 export function registerDetector(d: ContentDetector): void {
   DETECTORS.set(d.id, d);

@@ -2883,16 +2883,16 @@
  {
   "id": "exc-19-financial-data-unless-public-unobservable-class-never-enforced",
   "category": "exceptions",
-  "text": "Financial data may not be pasted into any AI tool unless it is already public.",
+  "text": "Trade secrets may not be pasted into any AI tool unless they are already public.",
   "surface": [
    {
     "kind": "clause",
-    "text": "Financial data may not be pasted into any AI tool unless it is already public",
+    "text": "Trade secrets may not be pasted into any AI tool unless they are already public.",
     "confidence": 0.8,
     "action": "paste",
     "data": {
      "classes": [
-      "FINANCIAL"
+      "TRADE_SECRET"
      ]
     },
     "destination": {
@@ -2941,7 +2941,8 @@
      "status": "degraded"
     }
    ]
-  }
+  },
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
  },
  {
   "id": "exc-20-every-agent-except-command-line-agents-may-read-docs",
@@ -3801,7 +3802,7 @@
  {
   "id": "comp-09-complement-plus-unobservable-class-not-enforced",
   "category": "complements",
-  "text": "Approved services: ChatGPT and Claude. Financial forecasts are not allowed to be shared with unapproved services.",
+  "text": "Approved services: ChatGPT and Claude. M&A forecasts are not allowed to be shared with unapproved services.",
   "surface": [
    {
     "kind": "definition",
@@ -3822,7 +3823,7 @@
     "action": "share",
     "data": {
      "classes": [
-      "FINANCIAL"
+      "M_AND_A"
      ]
     },
     "destination": {
@@ -3874,7 +3875,8 @@
      "status": "degraded"
     }
    ]
-  }
+  },
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
  },
  {
   "id": "comp-10-group-member-unknown-to-registry-degraded",
@@ -7560,7 +7562,7 @@
  {
   "id": "prec-010-unobservable-class-block-sorts-first-but-does-not-compile",
   "category": "precedence",
-  "text": "Financial forecasts must never be uploaded to ChatGPT. Analysts may upload spreadsheets to ChatGPT. Customer PII has to be tokenized before upload to ChatGPT.",
+  "text": "Cardholder data must never be uploaded to ChatGPT. Analysts may upload spreadsheets to ChatGPT. Customer PII has to be tokenized before upload to ChatGPT.",
   "surface": [
    {
     "kind": "clause",
@@ -7574,7 +7576,7 @@
     },
     "data": {
      "classes": [
-      "FINANCIAL"
+      "PCI"
      ]
     },
     "decision": "block"
@@ -7706,7 +7708,8 @@
      "host": "claude.ai"
     }
    ]
-  }
+  },
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
  },
  {
   "id": "prec-011-partially-observable-block-degrades-still-first",
@@ -7747,7 +7750,7 @@
     "data": {
      "classes": [
       "SECRET",
-      "FINANCIAL"
+      "M_AND_A"
      ]
     },
     "decision": "block"
@@ -7812,7 +7815,8 @@
      "status": "enforced"
     }
    ]
-  }
+  },
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
  },
  {
   "id": "prec-012-complement-block-outranks-group-allow",
@@ -13456,10 +13460,10 @@
  {
   "id": "hc-01-financial-block-understood-only",
   "category": "honesty-classes",
-  "text": "Financial data must never be sent to ChatGPT.",
+  "text": "Trade-secret data must never be sent to ChatGPT.",
   "surface": [
    {
-    "text": "Financial data must never be sent to ChatGPT.",
+    "text": "Trade-secret data must never be sent to ChatGPT.",
     "action": "send",
     "destination": {
      "service": [
@@ -13468,7 +13472,7 @@
     },
     "data": {
      "classes": [
-      "FINANCIAL"
+      "TRADE_SECRET"
      ]
     },
     "decision": "never"
@@ -13505,15 +13509,16 @@
      "kind": "catchAllPresent"
     }
    ]
-  }
+  },
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
  },
  {
   "id": "hc-02-health-record-phi-block-understood-only",
   "category": "honesty-classes",
-  "text": "Patient health records and PHI can never be uploaded to Claude or Gemini.",
+  "text": "Cardholder (PCI) account data can never be uploaded to Claude or Gemini.",
   "surface": [
    {
-    "text": "Patient health records and PHI can never be uploaded to Claude or Gemini.",
+    "text": "Cardholder (PCI) account data can never be uploaded to Claude or Gemini.",
     "action": "upload",
     "destination": {
      "service": [
@@ -13523,8 +13528,7 @@
     },
     "data": {
      "classes": [
-      "HEALTH_RECORD",
-      "PHI"
+      "PCI"
      ]
     },
     "decision": "block"
@@ -13562,15 +13566,16 @@
      "status": "degraded"
     }
    ]
-  }
+  },
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
  },
  {
   "id": "hc-03-legal-review-with-approvers-understood-only",
   "category": "honesty-classes",
-  "text": "Legal documents pasted into ChatGPT or Gemini need sign-off from the legal team.",
+  "text": "M&A deal documents pasted into ChatGPT or Gemini need sign-off from the deal team.",
   "surface": [
    {
-    "text": "Legal documents pasted into ChatGPT or Gemini need sign-off from the legal team.",
+    "text": "M&A deal documents pasted into ChatGPT or Gemini need sign-off from the deal team.",
     "action": "paste",
     "destination": {
      "service": [
@@ -13580,7 +13585,7 @@
     },
     "data": {
      "classes": [
-      "LEGAL"
+      "M_AND_A"
      ]
     },
     "decision": "sign-off",
@@ -13617,7 +13622,8 @@
      "decision": "ALLOW"
     }
    ]
-  }
+  },
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
  },
  {
   "id": "hc-04-health-record-review-no-approver-blocks-activation",
@@ -13671,17 +13677,17 @@
  {
   "id": "hc-05-financial-constrain-stays-constrain-never-allow",
   "category": "honesty-classes",
-  "text": "Tokenise financial figures before they reach any external AI service.",
+  "text": "Tokenise export-controlled identifiers before they reach any external AI service.",
   "surface": [
    {
-    "text": "Tokenise financial figures before they reach any external AI service.",
+    "text": "Tokenise export-controlled identifiers before they reach any external AI service.",
     "action": "send",
     "destination": {
      "category": "external ai"
     },
     "data": {
      "classes": [
-      "FINANCIAL"
+      "EXPORT_CONTROLLED"
      ]
     },
     "decision": "tokenize"
@@ -13720,15 +13726,16 @@
      "kind": "catchAllPresent"
     }
    ]
-  }
+  },
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
  },
  {
   "id": "hc-06-email-plus-financial-constrain-degraded",
   "category": "honesty-classes",
-  "text": "Mask email addresses and financial figures when they're sent to Gemini.",
+  "text": "Mask email addresses and M&A figures when they're sent to Gemini.",
   "surface": [
    {
-    "text": "Mask email addresses and financial figures when they're sent to Gemini.",
+    "text": "Mask email addresses and M&A figures when they're sent to Gemini.",
     "action": "send to",
     "destination": {
      "service": [
@@ -13738,7 +13745,7 @@
     "data": {
      "classes": [
       "EMAIL",
-      "FINANCIAL"
+      "M_AND_A"
      ]
     },
     "decision": "mask"
@@ -13781,7 +13788,8 @@
      "status": "enforced"
     }
    ]
-  }
+  },
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
  },
  {
   "id": "hc-07-ordinary-business-allow-understood-only",
@@ -14406,7 +14414,7 @@
     },
     "data": {
      "classes": [
-      "FINANCIAL"
+      "M_AND_A"
      ]
     },
     "decision": "may"
@@ -14485,7 +14493,8 @@
      "kind": "catchAllPresent"
     }
    ]
-  }
+  },
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
  },
  {
   "id": "hc-17-source-code-allow-copilot-block-deepseek",
@@ -14668,7 +14677,7 @@
     "data": {
      "classes": [
       "ENV_FILE",
-      "FINANCIAL"
+      "M_AND_A"
      ]
     },
     "decision": "block"
@@ -14711,7 +14720,8 @@
      "kind": "catchAllPresent"
     }
    ]
-  }
+  },
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
  },
  {
   "id": "hc-20-ordinary-plus-email-review-with-approvers-degraded",
@@ -22852,5 +22862,214 @@
     }
    ]
   }
+ },
+ {
+  "id": "hc-21-financial-block-now-enforced",
+  "category": "honesty-classes",
+  "text": "Financial statements must never be sent to ChatGPT.",
+  "surface": [
+   {
+    "text": "Financial statements must never be sent to ChatGPT.",
+    "action": "send",
+    "destination": {
+     "service": [
+      "ChatGPT"
+     ]
+    },
+    "data": {
+     "classes": [
+      "FINANCIAL"
+     ]
+    },
+    "decision": "block"
+   }
+  ],
+  "expect": {
+   "clauseCount": 1,
+   "rejectedCount": 0,
+   "compiledCount": 1,
+   "clauses": [
+    {
+     "decision": "BLOCK",
+     "action": "disclose",
+     "status": "enforced",
+     "plane": "network",
+     "effectiveDecision": "BLOCK",
+     "predicateFields": [
+      "tool_input.host",
+      "tool_input.content_kinds"
+     ],
+     "destHostsInclude": [
+      "chatgpt.com"
+     ]
+    }
+   ],
+   "mustNot": [
+    {
+     "kind": "statusIs",
+     "clauseIndex": 0,
+     "status": "understood_only"
+    },
+    {
+     "kind": "anyClauseWithDecision",
+     "decision": "ALLOW"
+    }
+   ]
+  },
+  "_note": "Positive proof of the capability pass: a real multi-signal content.<family> detector is now registered, so this family ENFORCES (detection-based BLOCK/REVIEW) with a host+content_kinds predicate \u2014 previously understood_only. Adding the detector was the only change; no compiler/parser/schema edit (\u00a727)."
+ },
+ {
+  "id": "hc-22-phi-block-now-enforced",
+  "category": "honesty-classes",
+  "text": "Patient health information must never be uploaded to Claude or Gemini.",
+  "surface": [
+   {
+    "text": "Patient health information must never be uploaded to Claude or Gemini.",
+    "action": "upload",
+    "destination": {
+     "service": [
+      "Claude",
+      "Gemini"
+     ]
+    },
+    "data": {
+     "classes": [
+      "PHI"
+     ]
+    },
+    "decision": "block"
+   }
+  ],
+  "expect": {
+   "clauseCount": 1,
+   "rejectedCount": 0,
+   "compiledCount": 1,
+   "clauses": [
+    {
+     "decision": "BLOCK",
+     "action": "disclose",
+     "status": "enforced",
+     "plane": "network",
+     "effectiveDecision": "BLOCK",
+     "predicateFields": [
+      "tool_input.host",
+      "tool_input.content_kinds"
+     ],
+     "destHostsInclude": [
+      "claude.ai",
+      "gemini.google.com"
+     ]
+    }
+   ],
+   "mustNot": [
+    {
+     "kind": "statusIs",
+     "clauseIndex": 0,
+     "status": "understood_only"
+    }
+   ]
+  },
+  "_note": "Positive proof of the capability pass: a real multi-signal content.<family> detector is now registered, so this family ENFORCES (detection-based BLOCK/REVIEW) with a host+content_kinds predicate \u2014 previously understood_only. Adding the detector was the only change; no compiler/parser/schema edit (\u00a727)."
+ },
+ {
+  "id": "hc-23-legal-review-now-enforced",
+  "category": "honesty-classes",
+  "text": "Legal contracts sent to any external AI service require legal sign-off.",
+  "surface": [
+   {
+    "text": "Legal contracts sent to any external AI service require legal sign-off.",
+    "action": "send",
+    "destination": {
+     "category": "external ai",
+     "trust": "external"
+    },
+    "data": {
+     "classes": [
+      "LEGAL"
+     ]
+    },
+    "decision": "review",
+    "approvers": [
+     "legal"
+    ]
+   }
+  ],
+  "expect": {
+   "clauseCount": 1,
+   "rejectedCount": 0,
+   "compiledCount": 1,
+   "clauses": [
+    {
+     "decision": "REVIEW",
+     "action": "disclose",
+     "status": "enforced",
+     "plane": "network",
+     "effectiveDecision": "REVIEW",
+     "predicateFields": [
+      "tool_input.host",
+      "tool_input.content_kinds"
+     ]
+    }
+   ],
+   "mustNot": [
+    {
+     "kind": "statusIs",
+     "clauseIndex": 0,
+     "status": "understood_only"
+    }
+   ]
+  },
+  "_note": "Positive proof of the capability pass: a real multi-signal content.<family> detector is now registered, so this family ENFORCES (detection-based BLOCK/REVIEW) with a host+content_kinds predicate \u2014 previously understood_only. Adding the detector was the only change; no compiler/parser/schema edit (\u00a727)."
+ },
+ {
+  "id": "hc-24-confidential-block-now-enforced",
+  "category": "honesty-classes",
+  "text": "Documents marked confidential must never be pasted into ChatGPT.",
+  "surface": [
+   {
+    "text": "Documents marked confidential must never be pasted into ChatGPT.",
+    "action": "paste",
+    "destination": {
+     "service": [
+      "ChatGPT"
+     ]
+    },
+    "data": {
+     "classes": [
+      "CONFIDENTIAL"
+     ]
+    },
+    "decision": "block"
+   }
+  ],
+  "expect": {
+   "clauseCount": 1,
+   "rejectedCount": 0,
+   "compiledCount": 1,
+   "clauses": [
+    {
+     "decision": "BLOCK",
+     "action": "disclose",
+     "status": "enforced",
+     "plane": "network",
+     "effectiveDecision": "BLOCK",
+     "predicateFields": [
+      "tool_input.host",
+      "tool_input.content_kinds"
+     ],
+     "destHostsInclude": [
+      "chatgpt.com"
+     ]
+    }
+   ],
+   "mustNot": [
+    {
+     "kind": "statusIs",
+     "clauseIndex": 0,
+     "status": "understood_only"
+    }
+   ]
+  },
+  "_note": "Positive proof of the capability pass: a real multi-signal content.<family> detector is now registered, so this family ENFORCES (detection-based BLOCK/REVIEW) with a host+content_kinds predicate \u2014 previously understood_only. Adding the detector was the only change; no compiler/parser/schema edit (\u00a727)."
  }
 ]

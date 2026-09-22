@@ -49,9 +49,9 @@ export const NETWORK_RUNTIME: RuntimeCapabilities = {
     "tool_name",
     "tool_input.host", "tool_input.path", "tool_input.method",
     "tool_input.content_kinds", "tool_input.findings", "tool_input.filenames",
-    "tool_input.bytes", "tool_input.has_file_upload", "tool_input.agent", "tool_input.uninspected",
+    "tool_input.bytes", "tool_input.has_file_upload", "tool_input.agent", "tool_input.device_id", "tool_input.uninspected",
   ]),
-  contentKinds: new Set(["secret", "source_code", "pii", "credential_file"]),
+  contentKinds: new Set(["secret", "source_code", "pii", "credential_file", "financial", "phi", "legal", "confidential"]),
   handlers: new Set(["data.transform"]),
   verifiesSubjectIdentity: false,
   attributesAgent: true,
@@ -189,12 +189,14 @@ export function futurePlaneCapabilities(): PlaneCapabilities[] {
     mk("gateway", ["observe.sql.statement", "observe.mcp.tool", "observe.iam.action", "transform.sql.max_rows", "transform.sql.allowed_columns", "transform.sql.blocked_statements", "transform.mcp.allowed_tools", "transform.payment.max_amount", "destination.host", "route.observed"]),
     // The resource plane is the natural home for future content intelligence:
     // it declares the enterprise data FAMILIES that are real and defensible but
-    // have no detector yet (financial, PHI, PCI, legal, IP) and data ownership.
-    // A clause needing one of these resolves to UNDERSTOOD_ONLY (a plane could
-    // host it) rather than PENDING (nothing ever could). Register a real
-    // detector and the SAME clause becomes enforced with no code change here.
+    // have no detector yet — PCI, IP/trade-secret, regulated, export-controlled,
+    // employee data, M&A. (financial, PHI, legal and confidential now have REAL
+    // multi-signal detectors in the network runtime, so they are ENFORCED there,
+    // not listed here.) A clause needing an as-yet-undetected family resolves to
+    // UNDERSTOOD_ONLY (a plane could host it) rather than PENDING. Register a real
+    // detector for one and the SAME clause becomes enforced with no change here.
     mk("resource", ["identity.user", "identity.group", "route.proxy_enforced", "route.observed", "destination.host",
                     "provenance.company", "provenance.customer", "provenance.tenant"],
-       ["financial", "phi", "pci", "legal", "ip", "confidential", "regulated", "export_controlled", "employee_data", "customer_data"]),
+       ["pci", "ip", "regulated", "export_controlled", "employee_data", "m_and_a"]),
   ];
 }

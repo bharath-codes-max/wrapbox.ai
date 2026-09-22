@@ -22,9 +22,14 @@ Commands:
   scan                                            Discover + emit receipts for new sightings
   wrap [id...]                                    Install PATH shims for detected shim-safe agents
   unwrap                                          Remove installed PATH shims
-  daemon                                          Foreground loop: heartbeat, pull, drain, tamper watch, proxy
+  ca init|install|uninstall|status                Manage the local CA used for content inspection
+  daemon [--protect-network] [--inspect]
+         [--record-all]                         Foreground loop: heartbeat, pull, drain, tamper watch, proxy
+  protect-network                                 Route every app's traffic through Wrapbox
+  unprotect-network                               Restore normal networking
   verify                                          Verify the local receipt chain (sig + prev + seq)
   sync                                            Drain the evidence spool once
+  capabilities                                    Print what this runtime can observe/classify/parse/enforce (JSON)
 
 State lives under WRAPBOX_HOME (default ~/.wrapbox).
 `;
@@ -54,12 +59,19 @@ async function main(): Promise<number> {
       return (await import("./commands/protect.js")).cmdProtect(rest);
     case "unprotect":
       return (await import("./commands/protect.js")).cmdUnprotect(rest);
+    case "ca":
+      return (await import("./commands/ca.js")).cmdCa(rest);
     case "daemon":
       return (await import("./commands/daemon.js")).cmdDaemon(rest);
     case "verify":
       return (await import("./commands/verify.js")).cmdVerify();
     case "sync":
       return (await import("./commands/sync.js")).cmdSync();
+    case "capabilities": {
+      const { describeRuntime } = await import("./capabilities.js");
+      process.stdout.write(JSON.stringify(describeRuntime(), null, 2) + "\n");
+      return 0;
+    }
     case "discover":
       return (await import("./commands/discover.js")).cmdDiscover();
     case "scan":

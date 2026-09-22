@@ -153,7 +153,7 @@ function handlerPlane(handler: string): PlaneName {
 const NETWORK_OBSERVED = new Set<string>([
   "tool_name", "tool_input.host", "tool_input.path", "tool_input.method",
   "tool_input.content_kinds", "tool_input.findings", "tool_input.filenames",
-  "tool_input.bytes", "tool_input.has_file_upload", "tool_input.agent",
+  "tool_input.bytes", "tool_input.has_file_upload", "tool_input.agent", "tool_input.device_id",
 ]);
 
 /** Map a fine-grained semantic class to its detector FAMILY (the capability

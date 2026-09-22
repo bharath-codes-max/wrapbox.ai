@@ -1,0 +1,275 @@
+[
+  {
+    "plane": "network",
+    "deployed": true,
+    "observes": [
+      "tool_name",
+      "tool_input.host",
+      "tool_input.port",
+      "tool_input.path",
+      "tool_input.method",
+      "tool_input.content_kinds",
+      "tool_input.findings",
+      "tool_input.filenames",
+      "tool_input.bytes",
+      "tool_input.has_file_upload",
+      "tool_input.agent",
+      "tool_input.device_id",
+      "tool_input.uninspected"
+    ],
+    "classifiers": [
+      {
+        "id": "wrapbox.deterministic.secret",
+        "family": "secret",
+        "method": "deterministic",
+        "local": true,
+        "emitsConfidence": false
+      },
+      {
+        "id": "wrapbox.deterministic.source_code",
+        "family": "source_code",
+        "method": "deterministic",
+        "local": true,
+        "emitsConfidence": false
+      },
+      {
+        "id": "wrapbox.deterministic.pii",
+        "family": "pii",
+        "method": "deterministic",
+        "local": true,
+        "emitsConfidence": false
+      },
+      {
+        "id": "wrapbox.deterministic.credential_file",
+        "family": "credential_file",
+        "method": "deterministic",
+        "local": true,
+        "emitsConfidence": false
+      },
+      {
+        "id": "wrapbox.financial",
+        "family": "financial",
+        "method": "multi-signal",
+        "local": true,
+        "emitsConfidence": true
+      },
+      {
+        "id": "wrapbox.phi",
+        "family": "phi",
+        "method": "multi-signal",
+        "local": true,
+        "emitsConfidence": true
+      },
+      {
+        "id": "wrapbox.legal",
+        "family": "legal",
+        "method": "multi-signal",
+        "local": true,
+        "emitsConfidence": true
+      },
+      {
+        "id": "wrapbox.confidential",
+        "family": "confidential",
+        "method": "multi-signal",
+        "local": true,
+        "emitsConfidence": true
+      }
+    ],
+    "parsers": [
+      {
+        "id": "text",
+        "formats": [
+          "text"
+        ],
+        "mimeTypes": [
+          "text/plain"
+        ],
+        "canInspect": true,
+        "canTransform": true,
+        "maxBytes": 67108864
+      },
+      {
+        "id": "json",
+        "formats": [
+          "json"
+        ],
+        "mimeTypes": [
+          "application/json"
+        ],
+        "canInspect": true,
+        "canTransform": true,
+        "maxBytes": 67108864
+      },
+      {
+        "id": "csv",
+        "formats": [
+          "csv",
+          "tsv"
+        ],
+        "mimeTypes": [
+          "text/csv",
+          "text/tab-separated-values"
+        ],
+        "canInspect": true,
+        "canTransform": true,
+        "maxBytes": 67108864
+      },
+      {
+        "id": "yaml",
+        "formats": [
+          "yaml"
+        ],
+        "mimeTypes": [
+          "application/yaml",
+          "text/yaml",
+          "application/x-yaml"
+        ],
+        "canInspect": true,
+        "canTransform": false,
+        "maxBytes": 16777216
+      },
+      {
+        "id": "xml",
+        "formats": [
+          "xml"
+        ],
+        "mimeTypes": [
+          "application/xml",
+          "text/xml"
+        ],
+        "canInspect": true,
+        "canTransform": false,
+        "maxBytes": 16777216
+      },
+      {
+        "id": "html",
+        "formats": [
+          "html"
+        ],
+        "mimeTypes": [
+          "text/html",
+          "application/xhtml+xml"
+        ],
+        "canInspect": true,
+        "canTransform": false,
+        "maxBytes": 16777216
+      },
+      {
+        "id": "multipart",
+        "formats": [
+          "multipart"
+        ],
+        "mimeTypes": [
+          "multipart/form-data"
+        ],
+        "canInspect": true,
+        "canTransform": true,
+        "maxBytes": 67108864
+      },
+      {
+        "id": "docx",
+        "formats": [
+          "docx"
+        ],
+        "mimeTypes": [
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ],
+        "canInspect": true,
+        "canTransform": false,
+        "maxBytes": 33554432
+      },
+      {
+        "id": "xlsx",
+        "formats": [
+          "xlsx"
+        ],
+        "mimeTypes": [
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ],
+        "canInspect": true,
+        "canTransform": false,
+        "maxBytes": 33554432
+      },
+      {
+        "id": "pdf",
+        "formats": [
+          "pdf"
+        ],
+        "mimeTypes": [
+          "application/pdf"
+        ],
+        "canInspect": false,
+        "canTransform": false,
+        "maxBytes": 0
+      }
+    ],
+    "handlers": [
+      "data.transform"
+    ],
+    "identitySignals": [
+      {
+        "capability": "identity.device",
+        "proven": true,
+        "source": "device enrollment key (per-request, verifiable)"
+      },
+      {
+        "capability": "identity.workload",
+        "proven": true,
+        "source": "enrolled daemon process"
+      },
+      {
+        "capability": "identity.user",
+        "proven": false,
+        "source": "not proven",
+        "requires": "enterprise IdP (Entra/Okta) — external blocker A"
+      },
+      {
+        "capability": "identity.group",
+        "proven": false,
+        "source": "not proven",
+        "requires": "enterprise IdP / directory group sync — external blocker A"
+      }
+    ],
+    "note": "TLS-terminating device proxy — live."
+  },
+  {
+    "plane": "gateway",
+    "deployed": false,
+    "observes": [
+      "tool_input.agent",
+      "tool_input.sql.statement",
+      "tool_input.sql.verb",
+      "tool_input.api.endpoint",
+      "tool_input.api.method",
+      "tool_input.mcp.tool",
+      "tool_input.mcp.args",
+      "tool_input.iam.action",
+      "tool_input.payment.amount",
+      "tool_input.payment.currency"
+    ],
+    "classifiers": [],
+    "parsers": [],
+    "handlers": [
+      "sql.max_rows",
+      "sql.blocked_statements",
+      "mcp.allowed_tools",
+      "api.allowed_endpoints",
+      "http.allowed_methods",
+      "payment.max_amount"
+    ],
+    "identitySignals": [
+      {
+        "capability": "identity.workload",
+        "proven": true,
+        "source": "enrolled daemon process"
+      },
+      {
+        "capability": "identity.user",
+        "proven": false,
+        "source": "not proven",
+        "requires": "enterprise IdP — external blocker A"
+      }
+    ],
+    "note": "Evaluator + handlers implemented and tested; no live broker transport yet (external blocker D for DB/cloud)."
+  }
+]
