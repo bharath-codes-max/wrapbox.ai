@@ -122,9 +122,21 @@ function gatherInspectable(body: Buffer, contentType: string): {
  * product gets uninstalled.
  * ------------------------------------------------------------------ */
 
-const SECRET_PATTERNS: { label: string; re: RegExp }[] = [
+/**
+ * AWS's own published documentation key (`AKIAIOSFODNN7EXAMPLE` and its ASIA
+ * twin). It appears in AWS docs, countless READMEs and our own test guide, so it
+ * trips the key pattern forever while being, by construction, not a credential.
+ *
+ * Rejecting it is safe rather than a loosening: a real Access Key ID is random
+ * base32, so ending in these exact seven characters is ~1 in 10^10. The key
+ * PATTERN below is deliberately unchanged — this is a post-match check only, so
+ * nothing that looks like a real key stops being detected.
+ */
+const AWS_DOC_EXAMPLE_KEY = /^(?:AKIA|ASIA)[0-9A-Z]{9}EXAMPLE$/;
+
+const SECRET_PATTERNS: { label: string; re: RegExp; validate?: (m: string) => boolean }[] = [
   { label: "private_key", re: /-----BEGIN\s+(?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/g },
-  { label: "aws_access_key", re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g },
+  { label: "aws_access_key", re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g, validate: (m) => !AWS_DOC_EXAMPLE_KEY.test(m) },
   { label: "github_token", re: /\bgh[pousr]_[A-Za-z0-9]{36,}\b/g },
   { label: "slack_token", re: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g },
   { label: "openai_key", re: /\bsk-(?:proj-)?[A-Za-z0-9_-]{32,}\b/g },
@@ -284,10 +296,14 @@ export function classifyContent(body: Buffer, contentType = ""): Classification 
   const kinds = new Set<ContentKind>();
 
   // --- secrets ---
-  for (const { label, re } of SECRET_PATTERNS) {
+  // `validate` is an optional post-match check (same shape PII_PATTERNS already
+  // uses). It can only ever REMOVE a match, never add one, so a pattern stays
+  // exactly as strict as it was written.
+  for (const { label, re, validate } of SECRET_PATTERNS) {
     re.lastIndex = 0;
-    const matches = text.match(re);
-    if (matches && matches.length > 0) {
+    const raw = text.match(re) ?? [];
+    const matches = validate ? raw.filter(validate) : raw;
+    if (matches.length > 0) {
       findings.push({ label, kind: "secret", count: matches.length });
       kinds.add("secret");
     }

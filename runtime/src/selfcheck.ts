@@ -106,13 +106,29 @@ function makeZip(entries: { name: string; data: string; fakeUncompSize?: number 
  * 3. RENAMED FILES cannot defeat a content rule (content is the pin)
  * ================================================================== */
 {
-  const secretBody = "config:\n  api_key = \"AKIA1234567890ABCD99\"\n  password: \"s3cr3t-p@ssw0rd-really-long-value\"\n";
+  // Key-shaped strings are BUILT from parts rather than written as literals, so
+  // this source file contains nothing a secret scanner — ours included — will
+  // flag when an agent reads the repo. (A literal here is exactly what produced
+  // the aws_access_key finding in the evidence trail.)
+  const AWS_REAL_SHAPE = "AKIA" + "QWERTYUIOPASDFGH";     // valid Access Key ID shape
+  const AWS_DOC_EXAMPLE = "AKIA" + "IOSFODNN7EXAMPLE";    // AWS's published doc key
+
+  const secretBody = `config:\n  api_key = "${AWS_REAL_SHAPE}"\n  password: "s3cr3t-p@ssw0rd-really-long-value"\n`;
   const asTxt = classifyContent(buf(secretBody), "text/plain");
   const asCsv = classifyContent(buf(secretBody), "text/csv");
   ok("secret-detected-regardless-of-type", asTxt.kinds.includes("secret") && asCsv.kinds.includes("secret"), JSON.stringify([asTxt.kinds, asCsv.kinds]));
   // A .txt renamed to .png (lying extension) still classifies on content.
   const pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA\n-----END RSA PRIVATE KEY-----";
   ok("pem-detected-any-name", classifyContent(buf(pem), "image/png").kinds.includes("secret"));
+
+  // The aws_access_key `validate` hook: AWS's documentation key is ignored, a
+  // real-shaped key is still caught. Bare `aws_key = …` (unquoted, and not one
+  // of the assigned_secret keywords) isolates the AWS pattern from the others.
+  const isAws = (s: string) => classifyContent(buf(`aws_key = ${s}`), "text/plain").findings.some((f) => f.label === "aws_access_key");
+  ok("aws-doc-example-key-ignored", !isAws(AWS_DOC_EXAMPLE), "EXAMPLE-suffixed doc key must not fire");
+  ok("aws-real-shape-key-still-detected", isAws(AWS_REAL_SHAPE), "a real-shaped key must still fire");
+  // And the example key must not sneak in as a 'secret' by any other route.
+  ok("aws-doc-example-not-secret-at-all", classifyContent(buf(`aws_key = ${AWS_DOC_EXAMPLE}`), "text/plain").kinds.length === 0);
 }
 
 /* ================================================================== *
