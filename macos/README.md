@@ -223,6 +223,17 @@ the bundle ID while `NEProviderClasses` still resolves to
 (SystemExtensions.h: "a property of a System Extension bundle"). Without it,
 `activate` fails: network-extension-category system extensions require it.
 
+**App Group prefixing `NEMachServiceName`** (added after `activate` failed with
+"extension category returned error", `OSSystemExtensionErrorDomain` code 9 =
+validationFailed). Apple DTS: a Network-Extension system extension's
+`NEMachServiceName`, when present, must be prefixed by one of the App Groups
+in the extension's signed `com.apple.security.application-groups` entitlement.
+Ours was `377DAPKD9V.io.wrapbox.WrapboxProxy.extension` with no group — so the
+prefix was implicit and validation refused. Both targets now carry the
+team-ID-prefixed group `377DAPKD9V.io.wrapbox.WrapboxProxy` (a native macOS
+form that needs no portal registration), and the Mach service name is a
+strict prefix match: `377DAPKD9V.io.wrapbox.WrapboxProxy` + `.extension`.
+
 ## Build
 
 ```sh

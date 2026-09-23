@@ -21,6 +21,15 @@
 	<array>
 		<string>app-proxy-provider</string>
 	</array>
+	<!-- NEMachServiceName (377DAPKD9V.io.wrapbox.WrapboxProxy.extension) must be
+	     prefixed by an App Group in this entitlement, or system-extension
+	     activation fails validation (OSSystemExtensionErrorDomain code 9).
+	     Team-ID-prefixed groups are the macOS-native form and need no portal
+	     registration; $(TeamIdentifierPrefix) expands to "377DAPKD9V.". -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>$(TeamIdentifierPrefix)io.wrapbox.WrapboxProxy</string>
+	</array>
 	<key>com.apple.security.app-sandbox</key><false/>
 </dict>
 </plist>
