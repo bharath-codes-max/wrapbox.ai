@@ -37,36 +37,150 @@ client of that same interface, so no daemon code changes.
 
 | File | Role |
 |---|---|
-| `WrapboxProxyExtension/TransparentProxyProvider.swift` | which flows to capture |
-| `WrapboxProxyExtension/FlowRouter.swift` | CONNECT to the daemon, pump bytes |
+| `WrapboxProxyExtension/TransparentProxyProvider.swift` | decides per flow: route, bypass (daemon), or drop (QUIC) |
+| `WrapboxProxyExtension/FlowRouter.swift` | carries one flow through the daemon; owned by the provider until done |
 | `WrapboxProxyExtension/SNISniffer.swift` | hostname from the TLS ClientHello |
-| `WrapboxApp/main.swift` | container app; activates only on explicit argument |
+| `Shared/FlowPolicy.swift` | the capture rules and per-flow decisions (unit-tested) |
+| `Shared/DaemonDialer.swift` | bounded `CONNECT` to the daemon; used by extension and app |
+| `Shared/DaemonIdentity.swift` | audit token → "is this the daemon?", cached per pid+version |
+| `Shared/ProcessSocketProbe.swift` | "does this process own the 127.0.0.1:4180 listener?" |
+| `WrapboxApp/main.swift` | `status` `preflight` `enable` `disable` `remove` `activate` `deactivate` |
+| `WrapboxApp/BrickGuard.swift` | the checks `enable` must pass |
+| `Tests/run-tests.sh` | all unit suites, against the same sources the targets compile |
+| `Tests/QUICProbe` | real HTTP/3 handshake — baseline now, the drill's QUIC check later |
 
-## Three problems this had to solve
+## What gets captured — and what does not
 
-**Hostname, not IP.** A transparent proxy is handed a flow the app already
-resolved, so the destination is an IP. `CONNECT 104.18.2.1:443` would break every
-host rule in the contract and make the daemon mint a certificate for an IP.
-`NEAppProxyFlow.remoteHostname` is populated only for connect-by-name APIs
-(NSURLSession, Network.framework) — Chrome, curl and node do their own DNS — so
-the fallback reads the SNI out of the ClientHello. Verified against a real
-OpenSSL ClientHello, and against truncated, malformed and random input.
+| Traffic | Handling | Why |
+|---|---|---|
+| TCP/443 from any app | routed to the daemon | the only port the daemon can inspect |
+| TCP/443 from the daemon itself | bypassed (`return false`) | loop guard — see below |
+| UDP/443 (QUIC / HTTP/3) | **claimed and closed** | cannot be inspected; client falls back to TCP |
+| TCP/80, everything else | never delivered | the daemon breaks plaintext through `CONNECT` |
+| loopback | never delivered | `NENetworkRule` excludes it by definition |
 
-**Loop prevention.** Two halves. The extension→daemon hop on loopback is
-excluded automatically: per `NENetworkRule.h`, a rule with nil remote and local
-networks matches all traffic *"except for loopback traffic"*. The daemon's own
-**egress** is not covered by that, so it is excluded by code-signing identifier
-via `WBXExcludedSigningIdentifiers` in the extension's `Info.plist`.
+**Rules first, `return false` last.** Apple DTS advice for transparent proxies is
+to "set up the rules so that you're not passed the flow"; returning NO has been
+seen to drop flows in edge cases. So port and protocol scoping live in
+`FlowPolicy.includedRules()`. `return false` is used only for the daemon's own
+egress — nothing a rule can express.
 
-> Homebrew's node is ad-hoc signed, so its identifier changes on upgrade.
-> Re-check before activation:
-> `codesign -dv "$(readlink -f "$(command -v node)")"`
-> A shipped, signed `wrapboxd` gets a stable identifier and this stops being fragile.
+**Port 80 is out of scope in phase 1.** The daemon with `--inspect` terminates TLS
+on every `CONNECT` regardless of port, so a plaintext stream dies (measured:
+`curl -p` to `http://example.com` → empty reply). Routing port 80 would break all
+plain HTTP. Fixing that is a daemon change, deliberately not made here.
 
-**QUIC.** With a system proxy configured, Chrome disables QUIC. A *transparent*
-proxy is invisible, so Chrome would use HTTP/3 over UDP/443, which a TCP proxy
-never sees — a silent enforcement hole. Phase 1 captures TCP only; UDP/443 must
-be captured and dropped to force TCP fallback before this is relied on.
+**QUIC is real on this Mac.** `Tests/QUICProbe` completes an HTTP/3 handshake to
+`cloudflare-quic.com` and `www.google.com` today, with no extension. A TCP-only
+capture would never see that traffic.
+
+## The daemon exclusion (loop guard)
+
+The daemon's own outbound connections must not be captured again, or they loop
+back into the daemon. The first design exempted a **code-signing identifier** —
+unsafe: Homebrew node is ad-hoc signed, and every node program shares the
+identity (verified: the daemon and a separate node process both report
+`node-5555494433c8…`). That would have exempted Codex and anything under `npx`.
+
+Now: **a flow is the daemon's if its source process currently owns the TCP
+listener on `127.0.0.1:4180`.**
+
+- source process — `NEFlowMetaData.sourceAppAuditToken`, documented in the macOS
+  27 SDK and recommended by Apple DTS for identifying a transparent-proxy flow.
+  It names the immediate socket owner (e.g. WebKit's networking process, not
+  Safari), which is the direction needed here.
+- listener ownership — public `libproc`, checking only that one process.
+- cached per (pid, pidversion) from the token, so a reused PID cannot inherit it.
+- any doubt (no token, lookup failure) → **route**, the enforcing direction.
+
+Residual risk, checked in the drill: if the daemon's own egress ever arrived with
+no audit token, it would be routed and loop. `status` reports `tokenlessFlows`.
+
+## Failure behaviour
+
+**Daemon down while routing is on.** The loopback hop to the daemon is bounded:
+a refused connection (which `NWConnection` reports as `.waiting`, never
+`.failed`) fails in ~0.01s, a silent daemon at 5s. The flow is closed; nothing
+reaches the destination. Web traffic is refused until the daemon is back, then
+recovers with no extension restart. Nothing restarts the daemon yet — it needs
+a launchd `KeepAlive` job.
+
+**Extension crashes — NOT documented by Apple.** No Apple document says what
+happens to matched flows while a transparent-proxy provider is down. The one
+field report matching this architecture (daemon + app + extension) saw traffic
+**blackholed**, not bypassed. Assume the worst: the kill switch below must not
+depend on the extension or the daemon being healthy.
+
+## Turning it on — two separate steps
+
+```
+WrapboxApp activate    install the system extension           — routes NOTHING
+WrapboxApp enable      create + enable the proxy configuration — captures TCP/443
+```
+
+`enable` runs a **brick guard** first and refuses unless all three hold. It does
+not re-implement policy in Swift — it asks the one engine, empirically:
+
+1. the daemon answers `CONNECT` on `127.0.0.1:4180`;
+2. it allows an ordinary host (`example.com`) at the CONNECT stage;
+3. a real HTTPS request through it succeeds under **system trust**.
+
+Check 3 is stronger than the `--protect-network` guard: it catches an untrusted
+Wrapbox CA, which would break every inspected site once routing starts.
+
+`WrapboxApp preflight` runs the same checks and changes nothing.
+
+## Rollback — fastest first
+
+None of these needs the daemon to be running or networksetup to be touched.
+
+| Level | Command / action | Effect |
+|---|---|---|
+| 0 | `WrapboxApp disable` | routing off, extension stays installed. Uses only NE preferences — no daemon, no network |
+| 0 (GUI) | System Settings → Network → *VPN & Filters / Filters & Proxies* → turn Wrapbox off | same (exact label confirmed at first enable) |
+| 1 | System Settings → General → Login Items & Extensions → Network Extensions → off | extension disabled |
+| 2 | `WrapboxApp remove` then `WrapboxApp deactivate` | configuration deleted, extension uninstalled |
+| 2 (GUI) | drag `WrapboxApp.app` from /Applications to the Trash | macOS removes the extension |
+| 3 | Safe Mode boot, delete the app | third-party extensions do not load in Safe Mode |
+
+Not used: `systemextensionsctl uninstall` / `reset`. The man page documents no
+preconditions for `uninstall`, and `reset` removes every vendor's extensions.
+
+### `panic.sh` must change before `enable` — proposed, NOT applied
+
+Today it kills the daemon (with the extension routing, that refuses the web),
+clears system-proxy settings the extension does not use, then its own test
+`curl` is captured too and it reports "Wrapbox is no longer involved" — untrue.
+Proposed first step:
+
+```sh
+# 0. If the Wrapbox Network Extension is routing, turn that off FIRST.
+APPBIN=/Applications/WrapboxApp.app/Contents/MacOS/WrapboxApp
+if [ -x "$APPBIN" ]; then "$APPBIN" disable && echo "  · network extension routing: OFF"; fi
+```
+
+and the closing message should check `WrapboxApp status` before claiming Wrapbox
+is not involved.
+
+## Drill — the first thing after `enable`
+
+Nothing is relied on until the kill switch is proven:
+
+1. `WrapboxApp enable` → `status` shows `connected`.
+2. `Tests/QUICProbe cloudflare-quic.com` → must print **H3 BLOCKED** (was
+   REACHABLE before enable).
+3. Chrome DevTools → Protocol column on `cloudflare-quic.com` shows `h2`, not
+   `h3`; a Wrapbox receipt exists for it.
+4. `curl https://httpbin.org/get` (no `-x`) → HTTP 200 → proves the daemon's own
+   egress is bypassed (not looped, not dropped); `status` shows
+   `bypassedDaemon > 0`, `tokenlessFlows = 0`.
+5. **Daemon-crash test:** stop the daemon → new HTTPS must fail within seconds,
+   not hang → restart it → HTTPS recovers without touching the extension.
+6. **Kill-switch test, with the daemon still stopped:** `WrapboxApp disable` →
+   HTTPS works again, directly.
+7. **Extension-crash test:** kill the extension process → record whether matched
+   traffic is blackholed or bypassed and how long relaunch takes. This is the
+   undocumented behaviour above; the drill makes it measured, not assumed.
 
 ## Signing, verified against the real portal (2026-09-23)
 
@@ -104,26 +218,27 @@ xcodebuild build -project macos/WrapboxProxy.xcodeproj -scheme WrapboxApp \
 Signed builds need a development certificate for the **Wrapbox Inc** team (see
 below).
 
-## Before activation — what would actually change
+## Before activation — status
 
-Activation is a real system change and has **not** been done. It would:
+Nothing has been installed or enabled. Signing is done (Wrapbox Inc,
+`377DAPKD9V`; `NEMachServiceName` resolves to
+`377DAPKD9V.io.wrapbox.WrapboxProxy.extension`).
 
-1. install a system extension into `/Library/SystemExtensions`
-2. prompt for approval in **System Settings → General → Login Items & Extensions**
-3. once approved, route **every app's** TCP/80/443 through `127.0.0.1:4180`
+| Step | System change | Routes traffic? |
+|---|---|---|
+| `activate` | installs the extension; approval in Login Items & Extensions | **no** |
+| `enable` | adds + enables a proxy configuration; approval prompt | **yes** — TCP/443 via the daemon, UDP/443 dropped |
 
-Prerequisites still outstanding:
+Still to do before `enable`, each needing your go-ahead:
 
-- a development certificate for the Wrapbox Inc team (none on this Mac)
-- `NEMachServiceName` must resolve to `<TeamID>.io.wrapbox.WrapboxProxy.extension`;
-  it currently builds without the prefix because no team is set
-- the app must be run from `/Applications`
-- the daemon must be listening on `127.0.0.1:4180`, or every flow fails closed
-- the `WBXExcludedSigningIdentifiers` entry must match the running daemon
+- update `panic.sh` (proposal above)
+- a launchd `KeepAlive` job for the daemon, so a crash is not permanent
+- copy `WrapboxApp.app` to `/Applications` (required for `activate`)
+- start the daemon with `--inspect` and **without** `--protect-network`
 
 SIP stays enabled throughout. The `systemextensionsctl developer on` route is
-deliberately not used — it requires disabling SIP, which is unnecessary once the
-extension is properly signed.
+deliberately not used — it requires disabling SIP, and proper signing makes it
+unnecessary.
 
 ## Relationship to Endpoint Security
 

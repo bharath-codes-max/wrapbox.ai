@@ -4,6 +4,13 @@
 <dict>
 	<!-- Lets this app ask OSSystemExtensionManager to install the extension. -->
 	<key>com.apple.developer.system-extension.install</key><true/>
+	<!-- Required to create/enable/disable the NETransparentProxyManager
+	     configuration (enable / disable / remove / status). Development value;
+	     see the extension's entitlements for the distribution note. -->
+	<key>com.apple.developer.networking.networkextension</key>
+	<array>
+		<string>app-proxy-provider</string>
+	</array>
 	<key>com.apple.security.app-sandbox</key><false/>
 </dict>
 </plist>

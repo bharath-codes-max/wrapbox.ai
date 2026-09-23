@@ -3,103 +3,138 @@ import Network
 import NetworkExtension
 import os.log
 
-/// The macOS Network Extension side of Wrapbox.
+/// The Wrapbox transparent proxy: capture TCP/443 and UDP/443, hand web flows
+/// to the existing daemon, drop QUIC, and never re-capture the daemon itself.
 ///
-/// SCOPE, DELIBERATELY SMALL: this decides which flows to capture and hands
-/// them to the existing daemon. It performs NO inspection, NO classification,
-/// NO policy evaluation, NO transformation and writes NO receipts — all of that
-/// stays in wrapboxd exactly as it is today. Replacing the system proxy must not
-/// become an excuse to fork the enforcement engine into a second language.
-final class TransparentProxyProvider: NETransparentProxyProvider {
+/// It performs NO inspection, classification, policy, transformation or
+/// receipts — all of that stays in wrapboxd.
+final class TransparentProxyProvider: NETransparentProxyProvider, NEAppProxyUDPFlowHandling {
 
     private let log = Logger(subsystem: "io.wrapbox.proxy.extension", category: "provider")
+    private let identity = DaemonIdentity(port: DaemonDialer.Config().port)
 
-    /// Code-signing identifiers whose traffic is NEVER captured.
-    ///
-    /// THE LOOP: the daemon's own connections to the real internet would
-    /// otherwise be captured and handed back to the daemon, forever. Loopback
-    /// (extension -> 127.0.0.1:4180) is already excluded by NENetworkRule
-    /// semantics, but the daemon's EGRESS is not, so it must be named here.
-    /// Read from Info.plist so it can be corrected without a code change —
-    /// necessary because an ad-hoc signed Homebrew node changes identifier on
-    /// every upgrade. A shipped, signed wrapboxd gets a stable identifier.
-    private var excludedSigningIdentifiers: Set<String> = []
+    private let lock = NSLock()
+    private var routers: [ObjectIdentifier: FlowRouter] = [:]
+    private var routed = 0, bypassedDaemon = 0, droppedQUIC = 0, daemonFailures = 0
+
+    // MARK: lifecycle
 
     override func startProxy(options: [String: Any]?, completionHandler: @escaping (Error?) -> Void) {
-        if let ids = Bundle.main.object(forInfoDictionaryKey: "WBXExcludedSigningIdentifiers") as? [String] {
-            excludedSigningIdentifiers = Set(ids)
-        }
-
-        let settings = NETransparentProxyNetworkSettings(tunnelRemoteAddress: FlowRouter.daemonHost)
-
-        // nil remote + nil local == "all traffic of this protocol and direction,
-        // EXCEPT loopback" (NENetworkRule.h). That exclusion is what makes the
-        // extension's own hop to the daemon safe without any extra rule.
-        let allOutboundTCP = NENetworkRule(
-            remoteNetworkEndpoint: nil, remotePrefix: 0,
-            localNetworkEndpoint: nil, localPrefix: 0,
-            protocol: .TCP, direction: .outbound)
-
-        settings.includedNetworkRules = [allOutboundTCP]
-
-        setTunnelNetworkSettings(settings) { [weak self] error in
+        let settings = NETransparentProxyNetworkSettings(tunnelRemoteAddress: DaemonDialer.Config().host)
+        settings.includedNetworkRules = FlowPolicy.includedRules()   // TCP+UDP 443, v4+v6, never loopback
+        setTunnelNetworkSettings(settings) { [log] error in
             if let error {
-                self?.log.error("settings rejected: \(error.localizedDescription, privacy: .public)")
+                log.error("settings rejected: \(error.localizedDescription, privacy: .public)")
             } else {
-                self?.log.info("wrapbox transparent proxy active — routing to \(FlowRouter.daemonHost):\(FlowRouter.daemonPort, privacy: .public)")
+                log.info("active: TCP/443 -> daemon, UDP/443 dropped, loopback and daemon egress exempt")
             }
             completionHandler(error)
         }
     }
 
     override func stopProxy(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
-        log.info("wrapbox transparent proxy stopping (reason \(reason.rawValue, privacy: .public))")
+        log.info("stopping (reason \(reason.rawValue, privacy: .public))")
         completionHandler()
     }
 
+    // MARK: TCP
+
     override func handleNewFlow(_ flow: NEAppProxyFlow) -> Bool {
-        // Phase 1 is TCP only. Returning false lets the flow proceed directly.
-        guard let tcp = flow as? NEAppProxyTCPFlow else { return false }
+        // Defensive: if a UDP flow is ever delivered here instead of via
+        // handleNewUDPFlow, QUIC must still not go direct.
+        if let udp = flow as? NEAppProxyUDPFlow {
+            return drop(udp, reason: "UDP flow delivered to the TCP path; dropped so QUIC cannot bypass")
+        }
+        guard let tcp = flow as? NEAppProxyTCPFlow,
+              let (address, port) = Self.hostPort(tcp.remoteFlowEndpoint) else { return false }
 
-        // Never capture the daemon's own egress (see excludedSigningIdentifiers).
-        let signer = flow.metaData.sourceAppSigningIdentifier
-        if excludedSigningIdentifiers.contains(signer) { return false }
+        let fromDaemon = identity.isDaemon(auditToken: flow.metaData.sourceAppAuditToken)
 
-        guard let (address, port) = Self.destination(of: tcp) else { return false }
+        switch FlowPolicy.tcp(port: port, fromDaemon: fromDaemon) {
+        case .bypass:
+            // Documented for NETransparentProxyProvider: returning NO hands the
+            // flow to the networking stack unproxied. Used ONLY for the daemon's
+            // own egress (no rule can express "this process") — the loop guard.
+            if fromDaemon { lock.lock(); bypassedDaemon += 1; lock.unlock() }
+            return false
+        case .drop:
+            return drop(flow, reason: "policy")
+        case .route:
+            route(tcp, address: address, port: port)
+            return true
+        }
+    }
 
-        // Only web traffic goes through the daemon; it is an HTTP proxy, and
-        // handing it SSH or SMTP would simply break those connections.
-        guard port == 80 || port == 443 else { return false }
+    private func route(_ tcp: NEAppProxyTCPFlow, address: String, port: UInt16) {
+        let hint = tcp.remoteHostname ?? ""
+        var router: FlowRouter!
+        router = FlowRouter(flow: tcp, hostHint: hint, fallbackAddress: address, port: port, log: log) { [weak self] failure in
+            guard let self else { return }
+            self.lock.lock()
+            self.routers[ObjectIdentifier(router)] = nil
+            if failure != nil { self.daemonFailures += 1 }
+            self.lock.unlock()
+        }
+        lock.lock()
+        routers[ObjectIdentifier(router)] = router   // owned until onFinish
+        routed += 1
+        lock.unlock()
+        router.start()
+    }
 
-        // Prefer a hostname the OS already knows (connect-by-name APIs). When it
-        // is nil — Chrome, curl, node all resolve DNS themselves — FlowRouter
-        // falls back to reading the SNI out of the ClientHello.
-        FlowRouter(flow: tcp,
-                   hostHint: flow.remoteHostname ?? "",
-                   fallbackAddress: address,
-                   port: port,
-                   log: log).start()
+    // MARK: UDP (fix E — QUIC / HTTP/3)
+
+    func handleNewUDPFlow(_ flow: NEAppProxyUDPFlow, initialRemoteFlowEndpoint remoteEndpoint: Network.NWEndpoint) -> Bool {
+        guard let (_, port) = Self.hostPort(remoteEndpoint) else { return drop(flow, reason: "unparseable UDP endpoint") }
+        switch FlowPolicy.udp(port: port) {
+        case .drop:
+            lock.lock(); droppedQUIC += 1; lock.unlock()
+            return drop(flow, reason: "QUIC/HTTP3 on UDP/443 is dropped so the client falls back to inspected TCP")
+        case .bypass, .route:
+            return false   // only UDP/443 is ever delivered by the rules
+        }
+    }
+
+    /// Claim the flow and close it without forwarding anything. Deliberately NOT
+    /// `return false`: for UDP the SDK documents NO as "terminated" while also
+    /// saying the default forwards to handleNewFlow (where NO means bypass). A
+    /// flow the proxy owns and never forwards cannot reach the network, whatever
+    /// that ambiguity resolves to.
+    private func drop(_ flow: NEAppProxyFlow, reason: String) -> Bool {
+        flow.open(withLocalFlowEndpoint: nil) { _ in
+            let err = NSError(domain: "io.wrapbox.proxy", code: 1, userInfo: [NSLocalizedDescriptionKey: reason])
+            flow.closeReadWithError(err)
+            flow.closeWriteWithError(err)
+        }
         return true
     }
 
-    /// Destination of a captured flow. `remoteFlowEndpoint` bridges into Swift as
-    /// the Network.framework `NWEndpoint` enum. For a transparent proxy this is
-    /// normally an ADDRESS, because the app already did its own DNS — which is
-    /// exactly why SNI sniffing exists downstream.
-    private static func destination(of flow: NEAppProxyTCPFlow) -> (String, UInt16)? {
-        guard case let .hostPort(host, port) = flow.remoteFlowEndpoint else { return nil }
-        let p = port.rawValue
-        guard p != 0 else { return nil }
+    // MARK: status for the container app
+
+    /// `WrapboxApp status` asks for these while the proxy runs. `tokenlessFlows`
+    /// is the one to watch in the drill: flows whose source process the OS did
+    /// not identify are ROUTED, so if the daemon's own egress ever arrived
+    /// token-less the loop guard would be blind.
+    override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
+        lock.lock()
+        let snapshot: [String: Int] = [
+            "routed": routed, "bypassedDaemon": bypassedDaemon, "droppedQUIC": droppedQUIC,
+            "daemonFailures": daemonFailures, "activeRouters": routers.count,
+            "tokenlessFlows": identity.tokenlessFlows,
+        ]
+        lock.unlock()
+        completionHandler?(try? JSONSerialization.data(withJSONObject: snapshot))
+    }
+
+    // MARK: helpers
+
+    static func hostPort(_ ep: Network.NWEndpoint) -> (String, UInt16)? {
+        guard case let .hostPort(host, port) = ep, port.rawValue != 0 else { return nil }
         switch host {
-        case .name(let n, _):
-            return (n, p)
-        case .ipv4(let a):
-            return ("\(a)", p)
-        case .ipv6(let a):
-            // Drop any %interface scope; it is meaningless to the daemon.
-            return (String("\(a)".split(separator: "%").first ?? ""), p)
-        @unknown default:
-            return nil
+        case .name(let n, _): return (n, port.rawValue)
+        case .ipv4(let a):    return ("\(a)", port.rawValue)
+        case .ipv6(let a):    return (String("\(a)".split(separator: "%").first ?? ""), port.rawValue)
+        @unknown default:     return nil
         }
     }
 }

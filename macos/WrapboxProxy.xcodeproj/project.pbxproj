@@ -6,6 +6,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AA0000000000000000000301 /* BrickGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000110 /* BrickGuard.swift */; };
+		AA0000000000000000000302 /* DaemonDialer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000701 /* DaemonDialer.swift */; };
+		AA0000000000000000000314 /* FlowPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000700 /* FlowPolicy.swift */; };
+		AA0000000000000000000315 /* DaemonDialer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000701 /* DaemonDialer.swift */; };
+		AA0000000000000000000316 /* DaemonIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000702 /* DaemonIdentity.swift */; };
+		AA0000000000000000000317 /* ProcessSocketProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000703 /* ProcessSocketProbe.swift */; };
 		AA0000000000000000000300 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000100 /* main.swift */; };
 		AA0000000000000000000310 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000200 /* main.swift */; };
 		AA0000000000000000000311 /* TransparentProxyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000201 /* TransparentProxyProvider.swift */; };
@@ -39,6 +45,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AA0000000000000000000110 /* BrickGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrickGuard.swift; sourceTree = "<group>"; };
+		AA0000000000000000000700 /* FlowPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowPolicy.swift; sourceTree = "<group>"; };
+		AA0000000000000000000701 /* DaemonDialer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaemonDialer.swift; sourceTree = "<group>"; };
+		AA0000000000000000000702 /* DaemonIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaemonIdentity.swift; sourceTree = "<group>"; };
+		AA0000000000000000000703 /* ProcessSocketProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessSocketProbe.swift; sourceTree = "<group>"; };
 		AA0000000000000000000011 /* WrapboxApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WrapboxApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000021 /* WrapboxProxyExtension.systemextension */ = {isa = PBXFileReference; explicitFileType = "wrapper.system-extension"; includeInIndex = 0; path = WrapboxProxyExtension.systemextension; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000100 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -63,6 +74,7 @@
 			children = (
 				AA0000000000000000000500 /* WrapboxApp */,
 				AA0000000000000000000501 /* WrapboxProxyExtension */,
+				AA0000000000000000000502 /* Shared */,
 				AA0000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -80,6 +92,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000100 /* main.swift */,
+				AA0000000000000000000110 /* BrickGuard.swift */,
 				AA0000000000000000000101 /* Info.plist */,
 				AA0000000000000000000102 /* WrapboxApp.entitlements */,
 			);
@@ -97,6 +110,17 @@
 				AA0000000000000000000205 /* WrapboxProxyExtension.entitlements */,
 			);
 			path = WrapboxProxyExtension;
+			sourceTree = "<group>";
+		};
+		AA0000000000000000000502 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000000000000000000700 /* FlowPolicy.swift */,
+				AA0000000000000000000701 /* DaemonDialer.swift */,
+				AA0000000000000000000702 /* DaemonIdentity.swift */,
+				AA0000000000000000000703 /* ProcessSocketProbe.swift */,
+			);
+			path = Shared;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -176,6 +200,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA0000000000000000000300 /* main.swift in Sources */,
+				AA0000000000000000000301 /* BrickGuard.swift in Sources */,
+				AA0000000000000000000302 /* DaemonDialer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -187,6 +213,10 @@
 				AA0000000000000000000311 /* TransparentProxyProvider.swift in Sources */,
 				AA0000000000000000000312 /* FlowRouter.swift in Sources */,
 				AA0000000000000000000313 /* SNISniffer.swift in Sources */,
+				AA0000000000000000000314 /* FlowPolicy.swift in Sources */,
+				AA0000000000000000000315 /* DaemonDialer.swift in Sources */,
+				AA0000000000000000000316 /* DaemonIdentity.swift in Sources */,
+				AA0000000000000000000317 /* ProcessSocketProbe.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -268,6 +298,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = WrapboxProxyExtension/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks");
+				OTHER_LDFLAGS = ("$(inherited)", "-lbsm");
 				PRODUCT_BUNDLE_IDENTIFIER = io.wrapbox.WrapboxProxy.extension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -284,6 +315,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = WrapboxProxyExtension/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks");
+				OTHER_LDFLAGS = ("$(inherited)", "-lbsm");
 				PRODUCT_BUNDLE_IDENTIFIER = io.wrapbox.WrapboxProxy.extension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
