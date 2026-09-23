@@ -68,6 +68,31 @@ proxy is invisible, so Chrome would use HTTP/3 over UDP/443, which a TCP proxy
 never sees — a silent enforcement hole. Phase 1 captures TCP only; UDP/443 must
 be captured and dropped to force TCP fallback before this is relied on.
 
+## Signing, verified against the real portal (2026-09-23)
+
+Team **Wrapbox Inc `377DAPKD9V`**, certificate `Apple Development: Bharath kumar
+Salla` (OU=377DAPKD9V, O=Wrapbox Inc — the Wrapbox team, not a Personal Team).
+
+**The Network Extensions capability IS enabled on the App ID.** Decoding the
+generated profile for `io.wrapbox.WrapboxProxy.extension` shows it grants:
+
+```
+app-proxy-provider, content-filter-provider, packet-tunnel-provider,
+dns-proxy, dns-settings, relay, url-filter-provider, hotspot-provider
+```
+
+Note what is ABSENT: none of the `-systemextension` suffixed values. So:
+
+| | Entitlement value | Needs |
+|---|---|---|
+| Development (now) | `app-proxy-provider` | nothing — already granted |
+| Developer ID distribution | `app-proxy-provider-systemextension` | Network Extension **distribution** authorization from Apple |
+
+That distribution request is a SECOND, separate Apple request — unrelated to the
+Endpoint Security one (`4586V6276K`). It is not needed to build or test locally.
+
+The app's profile grants `com.apple.developer.system-extension.install = true`.
+
 ## Build
 
 ```sh

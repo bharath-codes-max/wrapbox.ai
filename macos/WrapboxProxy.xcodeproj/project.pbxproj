@@ -235,6 +235,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = WrapboxApp/WrapboxApp.entitlements;
+				DEVELOPMENT_TEAM = 377DAPKD9V;
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = WrapboxApp/Info.plist;
@@ -248,6 +249,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = WrapboxApp/WrapboxApp.entitlements;
+				DEVELOPMENT_TEAM = 377DAPKD9V;
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = WrapboxApp/Info.plist;
@@ -261,6 +263,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = WrapboxProxyExtension/WrapboxProxyExtension.entitlements;
+				DEVELOPMENT_TEAM = 377DAPKD9V;
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = WrapboxProxyExtension/Info.plist;
@@ -276,6 +279,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = WrapboxProxyExtension/WrapboxProxyExtension.entitlements;
+				DEVELOPMENT_TEAM = 377DAPKD9V;
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = WrapboxProxyExtension/Info.plist;

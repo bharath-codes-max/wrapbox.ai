@@ -2,11 +2,24 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Transparent proxy = NEAppProxyProvider subclass, so the app-proxy value.
-	     The -systemextension suffix is REQUIRED for Developer ID distribution. -->
+	<!-- NETransparentProxyProvider subclasses NEAppProxyProvider, so the value is
+	     the app-proxy one.
+
+	     DEVELOPMENT vs DISTRIBUTION — this bit is easy to get wrong:
+	       development (Mac Team Provisioning Profile) grants the PLAIN values:
+	         app-proxy-provider, content-filter-provider, packet-tunnel-provider, ...
+	       Developer ID distribution requires the -systemextension suffixed values:
+	         app-proxy-provider-systemextension
+	     and those are NOT in a development profile. Verified by decoding the
+	     profile Apple generated for 377DAPKD9V.io.wrapbox.WrapboxProxy.extension.
+
+	     So: keep `app-proxy-provider` to build and test locally. Switch to
+	     `app-proxy-provider-systemextension` only once the Network Extension
+	     DISTRIBUTION entitlement has been granted by Apple — a separate request
+	     from the Endpoint Security one. -->
 	<key>com.apple.developer.networking.networkextension</key>
 	<array>
-		<string>app-proxy-provider-systemextension</string>
+		<string>app-proxy-provider</string>
 	</array>
 	<key>com.apple.security.app-sandbox</key><false/>
 </dict>
