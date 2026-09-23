@@ -146,7 +146,7 @@ None of these needs the daemon to be running or networksetup to be touched.
 Not used: `systemextensionsctl uninstall` / `reset`. The man page documents no
 preconditions for `uninstall`, and `reset` removes every vendor's extensions.
 
-### `panic.sh` must change before `enable` — proposed, NOT applied
+### `panic.sh` — applied 2026-09-23 (see status below)
 
 Today it kills the daemon (with the extension routing, that refuses the web),
 clears system-proxy settings the extension does not use, then its own test
@@ -220,25 +220,42 @@ below).
 
 ## Before activation — status
 
-Nothing has been installed or enabled. Signing is done (Wrapbox Inc,
-`377DAPKD9V`; `NEMachServiceName` resolves to
-`377DAPKD9V.io.wrapbox.WrapboxProxy.extension`).
+Nothing is installed or enabled. Signing is done (Wrapbox Inc, `377DAPKD9V`;
+`NEMachServiceName` = `377DAPKD9V.io.wrapbox.WrapboxProxy.extension`).
 
 | Step | System change | Routes traffic? |
 |---|---|---|
 | `activate` | installs the extension; approval in Login Items & Extensions | **no** |
 | `enable` | adds + enables a proxy configuration; approval prompt | **yes** — TCP/443 via the daemon, UDP/443 dropped |
 
-Still to do before `enable`, each needing your go-ahead:
+Pre-enable setup, completed 2026-09-23:
 
-- update `panic.sh` (proposal above)
-- a launchd `KeepAlive` job for the daemon, so a crash is not permanent
-- copy `WrapboxApp.app` to `/Applications` (required for `activate`)
-- start the daemon with `--inspect` and **without** `--protect-network`
+- **`panic.sh`** (in `~/Music/wrapbox-demo`, original kept as
+  `panic.sh.bak-2026-09-23`): routing off FIRST via `WrapboxApp disable`, then
+  `launchctl bootout` (a plain kill would be undone by KeepAlive), every call
+  time-bounded, and the closing message asks the extension before claiming
+  Wrapbox is not involved. Tested end to end.
+- **launchd `KeepAlive` job** `io.wrapbox.wrapboxd` — reference copy in
+  `launchd/`. `--inspect` only, never `--protect-network`. node is named
+  explicitly (tsx is `#!/usr/bin/env node` and launchd's PATH has no Homebrew).
+  Its log is its own new file, `state/wrapboxd.log`: pointed at the existing
+  `daemon.log`, launchd failed every spawn with exit 78 `EX_CONFIG` (bisected:
+  node, tsx, env, working directory and KeepAlive all work; only opening that
+  pre-existing file fails). SIGKILL of the daemon → back in 0.6s.
+- **`/Applications/WrapboxApp.app`** — byte-identical to the tested signed
+  build; signature valid in place; embedded profile lists this Mac.
+
+The daemon is now started by launchd. Do not also start it by hand with
+`--protect-network`: a second daemon would fight for port 4180 and turn the
+system proxy on.
+
+Open question, answered by the `activate` step itself: whether macOS loads a
+DEVELOPMENT-signed (un-notarizable) system extension with SIP enabled. Apple DTS
+(2020): "You only need to have SIP disabled if your app isn't notarised." A
+refused activation installs nothing and routes nothing.
 
 SIP stays enabled throughout. The `systemextensionsctl developer on` route is
-deliberately not used — it requires disabling SIP, and proper signing makes it
-unnecessary.
+deliberately not used — it requires disabling SIP.
 
 ## Relationship to Endpoint Security
 
