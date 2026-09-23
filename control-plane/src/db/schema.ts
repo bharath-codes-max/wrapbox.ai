@@ -123,4 +123,64 @@ export const MIGRATIONS = [
   `ALTER TABLE agents ADD COLUMN where_ TEXT`,
   `ALTER TABLE agents ADD COLUMN last_seen_at TEXT`,
   `CREATE UNIQUE INDEX IF NOT EXISTS uniq_agents_device_reg_where ON agents(device_id, registry_id, where_)`,
+
+  // --- CONSTRAIN becomes a first-class effect -------------------------------
+  //
+  // `rules.effect` and `decisions.effect` carry CHECK (effect IN (...)) and
+  // SQLite cannot ALTER a CHECK constraint — the table has to be rebuilt.
+  // Done the documented way (https://sqlite.org/lang_altertable.html#caution):
+  // create the new table, copy, drop, rename. Existing rows are untouched
+  // because the new CHECK is a strict superset of the old one.
+  //
+  // `constraint_json` holds WHICH values a constrain rule protects. A constrain
+  // rule without it is unenforceable and the evaluator downgrades it to block.
+  `DROP TABLE IF EXISTS rules_v2`,
+  `CREATE TABLE rules_v2 (
+    id TEXT PRIMARY KEY,
+    org_id TEXT NOT NULL REFERENCES orgs(id),
+    project_id TEXT REFERENCES projects(id),
+    name TEXT NOT NULL,
+    description TEXT,
+    effect TEXT NOT NULL CHECK (effect IN ('allow', 'constrain', 'block', 'review')),
+    priority INTEGER DEFAULT 0,
+    condition_json TEXT,
+    constraint_json TEXT,
+    active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `INSERT OR IGNORE INTO rules_v2 (id, org_id, project_id, name, description, effect, priority, condition_json, constraint_json, active, created_at)
+     SELECT id, org_id, project_id, name, description, effect, priority, condition_json, NULL, active, created_at FROM rules`,
+  // Turn FKs off for the documented SQLite table-rebuild dance below
+  // (https://sqlite.org/lang_altertable.html#otheralter): without this,
+  // dropping `rules` fails SQLITE_CONSTRAINT_FOREIGNKEY because `decisions`
+  // still references `rules.id`. FKs are turned back on after the rebuild.
+  `PRAGMA foreign_keys = OFF`,
+  `DROP TABLE rules`,
+  `ALTER TABLE rules_v2 RENAME TO rules`,
+
+  `DROP TABLE IF EXISTS decisions_v2`,
+  `CREATE TABLE decisions_v2 (
+    id TEXT PRIMARY KEY,
+    org_id TEXT NOT NULL REFERENCES orgs(id),
+    device_id TEXT NOT NULL REFERENCES devices(id),
+    agent_id TEXT REFERENCES agents(id),
+    project_id TEXT REFERENCES projects(id),
+    rule_id TEXT,
+    tool_name TEXT NOT NULL,
+    tool_input TEXT,
+    effect TEXT NOT NULL CHECK (effect IN ('allow', 'constrain', 'block', 'review')),
+    reason TEXT,
+    receipt_sig TEXT,
+    prev_receipt_hash TEXT,
+    latency_ms INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `INSERT OR IGNORE INTO decisions_v2 (id, org_id, device_id, agent_id, project_id, rule_id, tool_name, tool_input, effect, reason, receipt_sig, prev_receipt_hash, latency_ms, created_at)
+     SELECT id, org_id, device_id, agent_id, project_id, rule_id, tool_name, tool_input, effect, reason, receipt_sig, prev_receipt_hash, latency_ms, created_at FROM decisions`,
+  `DROP TABLE decisions`,
+  `ALTER TABLE decisions_v2 RENAME TO decisions`,
+  // Restore FK enforcement now that the rebuild is complete. On a fresh
+  // clone this leaves the connection with the same FK state the app has
+  // relied on all along (libsql's default is ON).
+  `PRAGMA foreign_keys = ON`,
 ];
