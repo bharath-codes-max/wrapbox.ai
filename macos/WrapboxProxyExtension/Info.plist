@@ -11,6 +11,11 @@
 	<key>CFBundleShortVersionString</key><string>0.1.0</string>
 	<key>CFBundleVersion</key><string>1</string>
 
+	<!-- Required for NE-category system extensions; shown to the user at activation
+	     (SystemExtensions.h: a property of the System Extension bundle). -->
+	<key>NSSystemExtensionUsageDescription</key>
+	<string>Wrapbox installs a network system extension to inspect and enforce security policies on outbound AI-agent and application traffic.</string>
+
 	<!-- System-extension NE providers are declared here (NOT under NSExtension). -->
 	<key>NetworkExtension</key>
 	<dict>

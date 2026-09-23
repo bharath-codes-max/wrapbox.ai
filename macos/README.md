@@ -219,6 +219,10 @@ sets `PRODUCT_NAME = $(PRODUCT_BUNDLE_IDENTIFIER)` and pins
 the bundle ID while `NEProviderClasses` still resolves to
 `WrapboxProxyExtension.TransparentProxyProvider`.
 
+**`NSSystemExtensionUsageDescription`** is in the extension's Info.plist
+(SystemExtensions.h: "a property of a System Extension bundle"). Without it,
+`activate` fails: network-extension-category system extensions require it.
+
 ## Build
 
 ```sh
