@@ -1,0 +1,313 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA0000000000000000000300 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000100 /* main.swift */; };
+		AA0000000000000000000310 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000200 /* main.swift */; };
+		AA0000000000000000000311 /* TransparentProxyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000201 /* TransparentProxyProvider.swift */; };
+		AA0000000000000000000312 /* FlowRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000202 /* FlowRouter.swift */; };
+		AA0000000000000000000313 /* SNISniffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000203 /* SNISniffer.swift */; };
+		AA0000000000000000000320 /* WrapboxProxyExtension.systemextension in Embed System Extensions */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000021 /* WrapboxProxyExtension.systemextension */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		AA0000000000000000000601 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA0000000000000000000020;
+			remoteInfo = WrapboxProxyExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		AA0000000000000000000403 /* Embed System Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "Contents/Library/SystemExtensions";
+			dstSubfolderSpec = 1;
+			files = (
+				AA0000000000000000000320 /* WrapboxProxyExtension.systemextension in Embed System Extensions */,
+			);
+			name = "Embed System Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		AA0000000000000000000011 /* WrapboxApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WrapboxApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000000021 /* WrapboxProxyExtension.systemextension */ = {isa = PBXFileReference; explicitFileType = "wrapper.system-extension"; includeInIndex = 0; path = WrapboxProxyExtension.systemextension; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000000100 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		AA0000000000000000000101 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA0000000000000000000102 /* WrapboxApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WrapboxApp.entitlements; sourceTree = "<group>"; };
+		AA0000000000000000000200 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		AA0000000000000000000201 /* TransparentProxyProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransparentProxyProvider.swift; sourceTree = "<group>"; };
+		AA0000000000000000000202 /* FlowRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowRouter.swift; sourceTree = "<group>"; };
+		AA0000000000000000000203 /* SNISniffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SNISniffer.swift; sourceTree = "<group>"; };
+		AA0000000000000000000204 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA0000000000000000000205 /* WrapboxProxyExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WrapboxProxyExtension.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AA0000000000000000000401 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		AA0000000000000000000411 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AA0000000000000000000002 /* Root */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000000000000000000500 /* WrapboxApp */,
+				AA0000000000000000000501 /* WrapboxProxyExtension */,
+				AA0000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AA0000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000000000000000000011 /* WrapboxApp.app */,
+				AA0000000000000000000021 /* WrapboxProxyExtension.systemextension */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		AA0000000000000000000500 /* WrapboxApp */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000000000000000000100 /* main.swift */,
+				AA0000000000000000000101 /* Info.plist */,
+				AA0000000000000000000102 /* WrapboxApp.entitlements */,
+			);
+			path = WrapboxApp;
+			sourceTree = "<group>";
+		};
+		AA0000000000000000000501 /* WrapboxProxyExtension */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000000000000000000200 /* main.swift */,
+				AA0000000000000000000201 /* TransparentProxyProvider.swift */,
+				AA0000000000000000000202 /* FlowRouter.swift */,
+				AA0000000000000000000203 /* SNISniffer.swift */,
+				AA0000000000000000000204 /* Info.plist */,
+				AA0000000000000000000205 /* WrapboxProxyExtension.entitlements */,
+			);
+			path = WrapboxProxyExtension;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AA0000000000000000000010 /* WrapboxApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA0000000000000000000012 /* Build configuration list for PBXNativeTarget "WrapboxApp" */;
+			buildPhases = (
+				AA0000000000000000000400 /* Sources */,
+				AA0000000000000000000401 /* Frameworks */,
+				AA0000000000000000000402 /* Resources */,
+				AA0000000000000000000403 /* Embed System Extensions */,
+			);
+			buildRules = ();
+			dependencies = (
+				AA0000000000000000000600 /* PBXTargetDependency */,
+			);
+			name = WrapboxApp;
+			productName = WrapboxApp;
+			productReference = AA0000000000000000000011 /* WrapboxApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+		AA0000000000000000000020 /* WrapboxProxyExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA0000000000000000000022 /* Build configuration list for PBXNativeTarget "WrapboxProxyExtension" */;
+			buildPhases = (
+				AA0000000000000000000410 /* Sources */,
+				AA0000000000000000000411 /* Frameworks */,
+				AA0000000000000000000412 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = WrapboxProxyExtension;
+			productName = WrapboxProxyExtension;
+			productReference = AA0000000000000000000021 /* WrapboxProxyExtension.systemextension */;
+			productType = "com.apple.product-type.system-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AA0000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					AA0000000000000000000010 = { CreatedOnToolsVersion = 16.0; };
+					AA0000000000000000000020 = { CreatedOnToolsVersion = 16.0; };
+				};
+			};
+			buildConfigurationList = AA0000000000000000000004 /* Build configuration list for PBXProject "WrapboxProxy" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base);
+			mainGroup = AA0000000000000000000002 /* Root */;
+			productRefGroup = AA0000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AA0000000000000000000010 /* WrapboxApp */,
+				AA0000000000000000000020 /* WrapboxProxyExtension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AA0000000000000000000402 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		AA0000000000000000000412 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AA0000000000000000000400 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0000000000000000000300 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000000000000000000410 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0000000000000000000310 /* main.swift in Sources */,
+				AA0000000000000000000311 /* TransparentProxyProvider.swift in Sources */,
+				AA0000000000000000000312 /* FlowRouter.swift in Sources */,
+				AA0000000000000000000313 /* SNISniffer.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AA0000000000000000000600 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA0000000000000000000020 /* WrapboxProxyExtension */;
+			targetProxy = AA0000000000000000000601 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		AA0000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AA0000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		AA0000000000000000000013 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = WrapboxApp/WrapboxApp.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = WrapboxApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks");
+				PRODUCT_BUNDLE_IDENTIFIER = io.wrapbox.WrapboxProxy;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		AA0000000000000000000014 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = WrapboxApp/WrapboxApp.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = WrapboxApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks");
+				PRODUCT_BUNDLE_IDENTIFIER = io.wrapbox.WrapboxProxy;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		AA0000000000000000000023 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = WrapboxProxyExtension/WrapboxProxyExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = WrapboxProxyExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks");
+				PRODUCT_BUNDLE_IDENTIFIER = io.wrapbox.WrapboxProxy.extension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "";
+			};
+			name = Debug;
+		};
+		AA0000000000000000000024 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = WrapboxProxyExtension/WrapboxProxyExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = WrapboxProxyExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks");
+				PRODUCT_BUNDLE_IDENTIFIER = io.wrapbox.WrapboxProxy.extension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AA0000000000000000000004 /* Build configuration list for PBXProject "WrapboxProxy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (AA0000000000000000000005 /* Debug */, AA0000000000000000000006 /* Release */);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA0000000000000000000012 /* Build configuration list for PBXNativeTarget "WrapboxApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (AA0000000000000000000013 /* Debug */, AA0000000000000000000014 /* Release */);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA0000000000000000000022 /* Build configuration list for PBXNativeTarget "WrapboxProxyExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (AA0000000000000000000023 /* Debug */, AA0000000000000000000024 /* Release */);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = AA0000000000000000000001 /* Project object */;
+}
