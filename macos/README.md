@@ -207,6 +207,18 @@ Endpoint Security one (`4586V6276K`). It is not needed to build or test locally.
 
 The app's profile grants `com.apple.developer.system-extension.install = true`.
 
+**Extension bundle name = bundle identifier.** The embedded bundle is
+`Contents/Library/SystemExtensions/io.wrapbox.WrapboxProxy.extension.systemextension`.
+Xcode's own product-type spec for `com.apple.product-type.system-extension`
+(`DarwinProductTypes.xcspec`, Xcode 27) defaults `PRODUCT_NAME` to
+`$(PRODUCT_BUNDLE_IDENTIFIER)`; the target originally overrode it with
+`$(TARGET_NAME)`, producing `WrapboxProxyExtension.systemextension`, which
+activation can reject as "extension not found in app bundle". The target now
+sets `PRODUCT_NAME = $(PRODUCT_BUNDLE_IDENTIFIER)` and pins
+`PRODUCT_MODULE_NAME = WrapboxProxyExtension`, so the executable is named after
+the bundle ID while `NEProviderClasses` still resolves to
+`WrapboxProxyExtension.TransparentProxyProvider`.
+
 ## Build
 
 ```sh

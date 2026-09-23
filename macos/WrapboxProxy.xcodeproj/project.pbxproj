@@ -17,7 +17,7 @@
 		AA0000000000000000000311 /* TransparentProxyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000201 /* TransparentProxyProvider.swift */; };
 		AA0000000000000000000312 /* FlowRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000202 /* FlowRouter.swift */; };
 		AA0000000000000000000313 /* SNISniffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000203 /* SNISniffer.swift */; };
-		AA0000000000000000000320 /* WrapboxProxyExtension.systemextension in Embed System Extensions */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000021 /* WrapboxProxyExtension.systemextension */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AA0000000000000000000320 /* io.wrapbox.WrapboxProxy.extension.systemextension in Embed System Extensions */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000021 /* io.wrapbox.WrapboxProxy.extension.systemextension */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -37,7 +37,7 @@
 			dstPath = "Contents/Library/SystemExtensions";
 			dstSubfolderSpec = 1;
 			files = (
-				AA0000000000000000000320 /* WrapboxProxyExtension.systemextension in Embed System Extensions */,
+				AA0000000000000000000320 /* io.wrapbox.WrapboxProxy.extension.systemextension in Embed System Extensions */,
 			);
 			name = "Embed System Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -51,7 +51,7 @@
 		AA0000000000000000000702 /* DaemonIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaemonIdentity.swift; sourceTree = "<group>"; };
 		AA0000000000000000000703 /* ProcessSocketProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessSocketProbe.swift; sourceTree = "<group>"; };
 		AA0000000000000000000011 /* WrapboxApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WrapboxApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		AA0000000000000000000021 /* WrapboxProxyExtension.systemextension */ = {isa = PBXFileReference; explicitFileType = "wrapper.system-extension"; includeInIndex = 0; path = WrapboxProxyExtension.systemextension; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000000021 /* io.wrapbox.WrapboxProxy.extension.systemextension */ = {isa = PBXFileReference; explicitFileType = "wrapper.system-extension"; includeInIndex = 0; path = io.wrapbox.WrapboxProxy.extension.systemextension; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000100 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		AA0000000000000000000101 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AA0000000000000000000102 /* WrapboxApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WrapboxApp.entitlements; sourceTree = "<group>"; };
@@ -83,7 +83,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000011 /* WrapboxApp.app */,
-				AA0000000000000000000021 /* WrapboxProxyExtension.systemextension */,
+				AA0000000000000000000021 /* io.wrapbox.WrapboxProxy.extension.systemextension */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -156,7 +156,7 @@
 			dependencies = ();
 			name = WrapboxProxyExtension;
 			productName = WrapboxProxyExtension;
-			productReference = AA0000000000000000000021 /* WrapboxProxyExtension.systemextension */;
+			productReference = AA0000000000000000000021 /* io.wrapbox.WrapboxProxy.extension.systemextension */;
 			productType = "com.apple.product-type.system-extension";
 		};
 /* End PBXNativeTarget section */
@@ -300,7 +300,8 @@
 				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks");
 				OTHER_LDFLAGS = ("$(inherited)", "-lbsm");
 				PRODUCT_BUNDLE_IDENTIFIER = io.wrapbox.WrapboxProxy.extension;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = WrapboxProxyExtension;
+				PRODUCT_NAME = "$(PRODUCT_BUNDLE_IDENTIFIER)";
 				SKIP_INSTALL = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "";
 			};
@@ -317,7 +318,8 @@
 				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks");
 				OTHER_LDFLAGS = ("$(inherited)", "-lbsm");
 				PRODUCT_BUNDLE_IDENTIFIER = io.wrapbox.WrapboxProxy.extension;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = WrapboxProxyExtension;
+				PRODUCT_NAME = "$(PRODUCT_BUNDLE_IDENTIFIER)";
 				SKIP_INSTALL = YES;
 			};
 			name = Release;
