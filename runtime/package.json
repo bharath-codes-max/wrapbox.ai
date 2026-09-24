@@ -13,11 +13,17 @@
   },
   "dependencies": {
     "@wrapbox/policy-core": "file:../packages/policy-core",
-    "nanoid": "^5.1.0"
+    "nanoid": "^5.1.0",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.27.0",
+    "@wrapbox/registry": "file:../packages/registry"
   },
   "devDependencies": {
-    "tsx": "^4.19.0",
     "@types/node": "^22.20.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.7.0"
+  },
+  "optionalDependencies": {
+    "onnxruntime-node": "^1.30.0"
   }
 }
