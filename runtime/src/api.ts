@@ -46,7 +46,7 @@ export async function enroll(server: string, body: EnrollBody): Promise<EnrollRe
 
 export async function heartbeat(
   cfg: Config,
-  body: { daemon_version?: string; ruleset_pulled_at?: string; chain_head_seq?: number },
+  body: { daemon_version?: string; ruleset_pulled_at?: string; chain_head_seq?: number; capabilities?: unknown },
 ): Promise<{ status: string; device_id: string }> {
   return post(`${cfg.server}/v1/devices/heartbeat`, body, { authorization: `Bearer ${cfg.api_key}` });
 }
@@ -55,12 +55,20 @@ export interface RulesPullResponse {
   rules: Array<{
     id: string;
     name: string;
-    effect: "allow" | "block" | "review";
+    effect: "allow" | "constrain" | "block" | "review";
     priority: number;
     condition_json: string | null;
+    constraint_json?: string | null;
     project_id: string | null;
+    /** v2 provenance: the IR clause / contract a rule was compiled from. */
+    clause_id?: string | null;
+    contract_id?: string | null;
+    meta_json?: string | null;
+    description?: string | null;
   }>;
   pulled_at: string;
+  /** The tenant's destination configuration (approved AI, internal domains, exemptions, groups). */
+  destinations?: import("@wrapbox/registry").TenantDestinationConfig;
 }
 
 export async function pullRules(cfg: Config): Promise<RulesPullResponse> {
@@ -95,3 +103,41 @@ export async function pushAgents(
 ): Promise<{ upserted: number; seen: number }> {
   return post(`${cfg.server}/v1/agents`, { agents }, { authorization: `Bearer ${cfg.api_key}` });
 }
+
+/* ------------------------------------------------------------------ *
+ * Approvals — the REVIEW verdict
+ * ------------------------------------------------------------------ */
+
+export interface ApprovalRequest {
+  org_id: string;
+  rule_id: string | null;
+  rule_name?: string;
+  summary: string;
+  destination?: string;
+  method?: string;
+  path?: string;
+  client_label?: string;
+  service_label?: string;
+  content_kinds?: string[];
+  findings?: string[];
+  bytes?: number;
+}
+
+export async function openApproval(cfg: Config, body: ApprovalRequest): Promise<{ id: string; expires_in_ms: number }> {
+  const res = await fetch(`${cfg.server}/v1/approvals`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${cfg.api_key}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`approval open failed: HTTP ${res.status}`);
+  return (await res.json()) as { id: string; expires_in_ms: number };
+}
+
+export async function readApproval(cfg: Config, id: string): Promise<{ state: string; decided_by?: string; note?: string }> {
+  const res = await fetch(`${cfg.server}/v1/approvals/${encodeURIComponent(id)}`, {
+    headers: { authorization: `Bearer ${cfg.api_key}` },
+  });
+  if (!res.ok) throw new Error(`approval read failed: HTTP ${res.status}`);
+  return (await res.json()) as { state: string; decided_by?: string; note?: string };
+}
+

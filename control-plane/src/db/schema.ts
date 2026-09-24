@@ -183,4 +183,30 @@ export const MIGRATIONS = [
   // clone this leaves the connection with the same FK state the app has
   // relied on all along (libsql's default is ON).
   `PRAGMA foreign_keys = ON`,
+
+  // ── v2: registry-driven policy ──────────────────────────────────────
+  // Rule provenance (which IR clause / contract a rule was compiled from)
+  // and the compiled coverage; the daemon echoes these into evidence.
+  `ALTER TABLE rules ADD COLUMN clause_id TEXT`,
+  `ALTER TABLE rules ADD COLUMN contract_id TEXT`,
+  `ALTER TABLE rules ADD COLUMN meta_json TEXT`,
+  // The device's capability snapshot, refreshed with every heartbeat, so the
+  // compiler judges coverage against the real runtime.
+  `ALTER TABLE devices ADD COLUMN capabilities_json TEXT`,
+  `ALTER TABLE devices ADD COLUMN capabilities_at TEXT`,
+  // The tenant's destination configuration (approved AI/SaaS, internal and
+  // partner domains, exemptions, named groups). Pulled by every device.
+  `ALTER TABLE orgs ADD COLUMN destinations_json TEXT`,
+  // Policy IR contracts as compiled (the canonical artifact behind the rules).
+  `CREATE TABLE IF NOT EXISTS contracts (
+    id TEXT PRIMARY KEY,
+    org_id TEXT NOT NULL REFERENCES orgs(id),
+    name TEXT,
+    version INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'retired')),
+    ir_json TEXT NOT NULL,
+    activation_json TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    activated_at TEXT
+  )`,
 ];

@@ -30,6 +30,8 @@ const HeartbeatBody = z.object({
   daemon_version: z.string().optional(),
   ruleset_pulled_at: z.string().optional(),
   chain_head_seq: z.number().int().optional(),
+  /** Runtime capability snapshot (RuntimeSnapshot from @wrapbox/registry). Stored verbatim; bounded. */
+  capabilities: z.any().optional(),
 });
 
 /** Accept only an SPKI PEM that parses as an EC P-256 public key. */
@@ -104,16 +106,40 @@ export async function devicesRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: "Invalid body", details: parsed.error.flatten() });
     const b = parsed.data;
 
+    const caps = b.capabilities && typeof b.capabilities === "object" ? JSON.stringify(b.capabilities) : null;
+    if (caps && caps.length > 512 * 1024) return reply.code(413).send({ error: "capability snapshot too large" });
     await client().execute({
       sql: `UPDATE devices SET last_heartbeat = datetime('now'), state = 'healthy',
               daemon_version = COALESCE(?, daemon_version),
               ruleset_pulled_at = COALESCE(?, ruleset_pulled_at),
-              chain_head_seq = COALESCE(?, chain_head_seq)
+              chain_head_seq = COALESCE(?, chain_head_seq),
+              capabilities_json = COALESCE(?, capabilities_json),
+              capabilities_at = CASE WHEN ? IS NULL THEN capabilities_at ELSE datetime('now') END
             WHERE id = ?`,
-      args: [b.daemon_version ?? null, b.ruleset_pulled_at ?? null, b.chain_head_seq ?? null, device.id],
+      args: [b.daemon_version ?? null, b.ruleset_pulled_at ?? null, b.chain_head_seq ?? null, caps, caps, device.id],
     });
 
     return reply.send({ status: "ok", device_id: device.id });
+  });
+
+  // Admin: one device's capability snapshot (what the compiler judges coverage against)
+  app.get("/v1/devices/:id/capabilities", async (req, reply) => {
+    if (!resolveAdmin(req)) return reply.code(401).send({ error: "Unauthorized" });
+    const { id } = req.params as { id: string };
+    const { rows } = await client().execute({ sql: "SELECT capabilities_json, capabilities_at, last_heartbeat FROM devices WHERE id = ?", args: [id] });
+    if (!rows.length) return reply.code(404).send({ error: "no such device" });
+    const raw = rows[0].capabilities_json;
+    return reply.send({ device_id: id, capabilities_at: rows[0].capabilities_at ?? null, last_heartbeat: rows[0].last_heartbeat ?? null, capabilities: raw ? JSON.parse(String(raw)) : null });
+  });
+
+  // Admin: the org's most recent snapshot (any device) — the compiler's default runtime.
+  app.get("/v1/capabilities", async (req, reply) => {
+    if (!resolveAdmin(req)) return reply.code(401).send({ error: "Unauthorized" });
+    const { org_id } = req.query as { org_id?: string };
+    if (!org_id) return reply.code(400).send({ error: "org_id required" });
+    const { rows } = await client().execute({ sql: "SELECT id, capabilities_json, capabilities_at FROM devices WHERE org_id = ? AND capabilities_json IS NOT NULL ORDER BY capabilities_at DESC LIMIT 1", args: [org_id] });
+    if (!rows.length) return reply.send({ device_id: null, capabilities: null });
+    return reply.send({ device_id: rows[0].id, capabilities_at: rows[0].capabilities_at, capabilities: JSON.parse(String(rows[0].capabilities_json)) });
   });
 
   // Admin: list all devices

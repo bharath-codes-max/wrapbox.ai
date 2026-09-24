@@ -19,6 +19,12 @@ import { RUNTIME_CONTENT_KINDS } from "./classify.js";
 import { classDetectors } from "./classifiers.js";
 import { allParsers } from "./parsers.js";
 import { gatewayObserves, GATEWAY_HANDLERS } from "./gateway.js";
+import { registryPins, type RuntimeSnapshot } from "@wrapbox/registry";
+import { detectorAvailability } from "./detectors/index.js";
+import { extractorAvailability } from "./extract/index.js";
+import { TRANSFORM_AVAILABILITY } from "./transform.js";
+import { vaultKeySource } from "./vaultkey.js";
+import { tenantDestinationSource } from "./tenant.js";
 
 export interface ClassifierInfo {
   id: string;
@@ -65,7 +71,37 @@ export const NETWORK_OBSERVES = [
   "tool_input.content_kinds", "tool_input.findings", "tool_input.filenames",
   "tool_input.bytes", "tool_input.has_file_upload", "tool_input.agent",
   "tool_input.device_id", "tool_input.uninspected",
+  // v2 (registry-driven rules)
+  "tool_input.destination_class", "tool_input.service", "tool_input.findings_v2", "tool_input.finding_types",
+  "tool_input.inspection", "tool_input.uninspectable_state", "tool_input.carrier", "tool_input.extractor",
 ];
+
+/**
+ * The v2 self-description the compiler's coverage check consumes: what is
+ * AVAILABLE right now (plugins loaded, sidecars reachable, key in the
+ * Keychain), the transports this plane actually observes, and the registry
+ * versions everything was built against.
+ */
+export function describeSnapshot(): RuntimeSnapshot & { vault: { keychain: boolean }; destinations: { source: "file" | "seed" } } {
+  return {
+    plane: "network",
+    deployed: true,
+    detectors: detectorAvailability(),
+    extractors: extractorAvailability(),
+    transforms: TRANSFORM_AVAILABILITY,
+    observes: NETWORK_OBSERVES,
+    identity: identitySignals().map((i) => ({ capability: i.capability, proven: i.proven })),
+    transport: {
+      ports: [443],               // the macOS Network Extension routes TCP/443 only
+      plaintextHttp: false,
+      websocket: "fail_closed",   // upgrades are decided host-only and blocked wherever a protection could apply
+      neverDecrypt: ["PERSONAL_EXEMPT", "INFRA_EXEMPT"],
+    },
+    registryVersions: registryPins(),
+    vault: { keychain: vaultKeySource() === "keychain" },
+    destinations: { source: tenantDestinationSource() },
+  };
+}
 
 /** The transform handlers the network runtime actually executes today. */
 export const NETWORK_HANDLERS = ["data.transform"];

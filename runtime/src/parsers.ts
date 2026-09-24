@@ -174,6 +174,20 @@ function readEntry(buf: Buffer, e: ZipEntry, budget: number): Buffer | null {
 }
 
 /** Extract concatenated text from the XML entries of a DOCX/XLSX, bounded. */
+/**
+ * Bounded ZIP access for plugins (label metadata, credential-file names inside
+ * archives). Same reader, same budgets — never a second unzip implementation.
+ */
+export function zipEntries(body: Buffer): Array<{ name: string; compSize: number; uncompSize: number }> | null {
+  const entries = readCentralDirectory(body);
+  return entries ? entries.map((e) => ({ name: e.name, compSize: e.compSize, uncompSize: e.uncompSize })) : null;
+}
+export function zipEntry(body: Buffer, name: string, maxBytes = LIMITS.maxArchiveTextBytes): Buffer | null {
+  const entries = readCentralDirectory(body);
+  const e = entries?.find((x) => x.name === name);
+  return e ? readEntry(body, e, maxBytes) : null;
+}
+
 function extractOfficeText(body: Buffer, want: (name: string) => boolean): ExtractResult | null {
   const entries = readCentralDirectory(body);
   if (!entries) return null;

@@ -25,9 +25,14 @@ export interface Constraint {
   kind: ConstraintKind;
   /** Column / JSON-key names to protect, e.g. ["Email", "Phone"]. */
   fields?: string[];
-  /** Data classes to protect wherever they appear, e.g. ["EMAIL", "CARD"]. */
+  /** Data classes to protect wherever they appear — registry ids ("PII.CONTACT.EMAIL") or legacy names ("EMAIL"). */
   classes?: string[];
+  /** v2: the Transform Registry handler (REDACT, MASK, REVERSIBLE_TOKENIZE, HASH, DROP_FIELD, LIMIT, …). `kind` stays for old runtimes. */
+  handler?: string;
+  params?: Record<string, unknown>;
 }
+
+const KNOWN_HANDLERS = new Set(["REDACT", "MASK", "REVERSIBLE_TOKENIZE", "HASH", "DROP_FIELD", "GENERALIZE", "DATE_SHIFT", "FORMAT_PRESERVING", "LIMIT", "REWRITE"]);
 
 export interface Rule {
   id: string;
@@ -72,9 +77,14 @@ export function parseConstraint(raw: string | null | undefined): Constraint | nu
     if (p.kind !== "reversible_tokenize" && p.kind !== "redact") return null;
     const fields = Array.isArray(p.fields) ? p.fields.filter((f) => typeof f === "string" && f.trim()) : [];
     const classes = Array.isArray(p.classes) ? p.classes.filter((c) => typeof c === "string" && c.trim()) : [];
-    // A constraint that names nothing protects nothing.
-    if (!fields.length && !classes.length) return null;
-    return { kind: p.kind, ...(fields.length ? { fields } : {}), ...(classes.length ? { classes } : {}) };
+    const handler = typeof p.handler === "string" && KNOWN_HANDLERS.has(p.handler) ? p.handler : undefined;
+    if (typeof p.handler === "string" && !handler) return null;   // an unknown handler cannot be applied
+    const params = p.params && typeof p.params === "object" && !Array.isArray(p.params) ? p.params : undefined;
+    // A constraint that names nothing protects nothing — except a shape
+    // handler (LIMIT) whose target is the document itself.
+    if (!fields.length && !classes.length && handler !== "LIMIT") return null;
+    if (handler === "LIMIT" && !params) return null;
+    return { kind: p.kind, ...(fields.length ? { fields } : {}), ...(classes.length ? { classes } : {}), ...(handler ? { handler } : {}), ...(params ? { params } : {}) };
   } catch {
     return null;
   }

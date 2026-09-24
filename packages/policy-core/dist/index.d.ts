@@ -22,8 +22,11 @@ export interface Constraint {
     kind: ConstraintKind;
     /** Column / JSON-key names to protect, e.g. ["Email", "Phone"]. */
     fields?: string[];
-    /** Data classes to protect wherever they appear, e.g. ["EMAIL", "CARD"]. */
+    /** Data classes to protect wherever they appear — registry ids ("PII.CONTACT.EMAIL") or legacy names ("EMAIL"). */
     classes?: string[];
+    /** v2: the Transform Registry handler (REDACT, MASK, REVERSIBLE_TOKENIZE, HASH, DROP_FIELD, LIMIT, …). `kind` stays for old runtimes. */
+    handler?: string;
+    params?: Record<string, unknown>;
 }
 export interface Rule {
     id: string;

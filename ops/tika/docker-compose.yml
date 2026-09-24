@@ -1,0 +1,60 @@
+# Wrapbox Tika sidecar — isolated parser for PDF / legacy Office / mail / archives.
+#
+# WHY these settings: hostile documents target parsers, so the parser runs in a
+# memory- and CPU-capped, read-only, capability-dropped container on a network
+# with NO egress. The only way in is the loopback publish on 127.0.0.1:9998,
+# which is the address runtime/src/extract/tika.ts refuses to deviate from
+# unless the tenant opts in. Extracted text flows back to wrapboxd and nowhere
+# else; the container has no route to the internet and no writable disk beyond
+# a tmpfs the forked parser JVM needs for scratch space.
+#
+# Image: the official apache/tika "full" build (Tesseract OCR + extras).
+# OCR stays enabled because the -full image is the one that carries it; the
+# "-minimal" variant would silently return no text for scanned pages.
+
+services:
+  tika:
+    image: apache/tika:4.0.0-full
+    container_name: wrapbox-tika
+    # Loopback only. Do not widen to 0.0.0.0 — the runtime treats a
+    # non-loopback endpoint as an off-device copy of every outbound body.
+    ports:
+      - "127.0.0.1:9998:9998"
+    # Internal network: no default route, no egress. The port publish above is
+    # the single explicit ingress. See README for engines that refuse to publish
+    # ports on internal networks.
+    networks:
+      - tika_isolated
+    # The official entrypoint appends these to `TikaServerCli -h 0.0.0.0`.
+    command: ["-c", "/tika-config.xml"]
+    volumes:
+      - ./tika-config.xml:/tika-config.xml:ro
+    read_only: true
+    tmpfs:
+      # Forked parser JVMs and Tesseract write scratch files here.
+      - /tmp:size=1g,mode=1777
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 512
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      # The image ships no curl/wget; a bash TCP probe is enough to know the
+      # server accepts connections. The runtime's own probe is GET /version.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9998 && printf 'GET /version HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q 'Tika' <&3"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  tika_isolated:
+    internal: true

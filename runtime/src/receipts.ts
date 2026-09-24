@@ -9,6 +9,7 @@ import { nanoid } from "nanoid";
 import { stableStringify, sha256hex } from "./canonical.js";
 import { PATHS, type Config } from "./config.js";
 import { pushEvidence } from "./api.js";
+import type { EvidenceV2 } from "@wrapbox/registry";
 
 export interface Receipt {
   v: 1;
@@ -22,12 +23,31 @@ export interface Receipt {
   tool_name: string;
   tool_input_sha256: string;
   target: string;
-  effect: "allow" | "block" | "review" | "tamper" | "violation";
+  /**
+   * "constrain" = the request WAS forwarded, but only after the runtime
+   * rewrote the body so protected values never left the device. Evidence must
+   * distinguish it from "allow" (passed unchanged) — conflating them is what
+   * lets a masking failure read as a success.
+   */
+  effect: "allow" | "constrain" | "block" | "review" | "tamper" | "violation";
   reason: string;
   rule_id: string | null;
   ruleset_pulled_at: string | null;
-  enforcement: "hook" | "seatbelt" | "both" | "unwrapped" | "hook-degraded" | "proxy";
+  /** "proxy" = decided on hostname alone; "mitm" = TLS terminated and body inspected. */
+  enforcement: "hook" | "seatbelt" | "both" | "unwrapped" | "hook-degraded" | "proxy" | "mitm";
+  /** Which browser or tool made the request, from its User-Agent. Attribution
+   *  only — never an input to the decision, since a User-Agent can be forged. */
+  client?: string;
+  /** Human label for `client`, e.g. "Chrome" or an unrecognised product token. */
+  client_label?: string;
+  /** The destination as a known service ("openai", "claude") when recognised. */
+  service?: string;
+  service_label?: string;
   degraded: boolean;
+  /** Evidence v2: canonical types, detectors, destination class, transform,
+   *  capability status and why any fail-closed action happened. Additive —
+   *  v1 fields are unchanged and the signature covers everything. */
+  evidence?: EvidenceV2;
   prev: string;
   sig: string;
 }
@@ -90,6 +110,11 @@ export interface ReceiptFields {
   ruleset_pulled_at: string | null;
   enforcement: Receipt["enforcement"];
   degraded: boolean;
+  client?: string;
+  client_label?: string;
+  service?: string;
+  service_label?: string;
+  evidence?: EvidenceV2;
 }
 
 /**
@@ -121,7 +146,12 @@ export function makeReceipt(cfg: Pick<Config, "device_id" | "key_id">, fields: R
     rule_id: fields.rule_id,
     ruleset_pulled_at: fields.ruleset_pulled_at,
     enforcement: fields.enforcement,
+    ...(fields.client ? { client: fields.client } : {}),
+    ...(fields.client_label ? { client_label: fields.client_label } : {}),
+    ...(fields.service ? { service: fields.service } : {}),
+    ...(fields.service_label ? { service_label: fields.service_label } : {}),
     degraded: fields.degraded,
+    ...(fields.evidence ? { evidence: fields.evidence } : {}),
     prev,
   };
 

@@ -29,7 +29,8 @@ Commands:
   unprotect-network                               Restore normal networking
   verify                                          Verify the local receipt chain (sig + prev + seq)
   sync                                            Drain the evidence spool once
-  capabilities                                    Print what this runtime can observe/classify/parse/enforce (JSON)
+  capabilities [--v1]                             Print what this runtime can observe/classify/parse/enforce (JSON)
+  edm build --name N --type T --csv FILE …        Build a privacy-preserving Exact Data Match index (hashed, never plaintext)
 
 State lives under WRAPBOX_HOME (default ~/.wrapbox).
 `;
@@ -68,8 +69,22 @@ async function main(): Promise<number> {
     case "sync":
       return (await import("./commands/sync.js")).cmdSync();
     case "capabilities": {
-      const { describeRuntime } = await import("./capabilities.js");
-      process.stdout.write(JSON.stringify(describeRuntime(), null, 2) + "\n");
+      // Load plugins and probe sidecars first, so the snapshot reports what is
+      // genuinely available on this device — the same truth the daemon sends.
+      const { loadPlugins } = await import("./detectors/index.js");
+      const { loadExtractors } = await import("./extract/index.js");
+      await loadPlugins(); await loadExtractors();
+      const { describeRuntime, describeSnapshot } = await import("./capabilities.js");
+      const out = rest.includes("--v1") ? describeRuntime() : { v: 2, snapshot: describeSnapshot(), legacy: describeRuntime() };
+      process.stdout.write(JSON.stringify(out, null, 2) + "\n");
+      return 0;
+    }
+    case "edm": {
+      const mod = (await import("./edm/index.js")) as unknown as { runEdmCli?: (a: string[]) => Promise<unknown> | unknown };
+      if (typeof mod.runEdmCli !== "function") { console.error("✖ EDM module not available in this build"); return 1; }
+      const r = (await mod.runEdmCli(rest)) as { ok?: boolean; exitCode?: number; message?: string } | number | undefined;
+      if (typeof r === "number") return r;
+      if (r && typeof r === "object") { if (r.message) console.log(r.message); return typeof r.exitCode === "number" ? r.exitCode : (r.ok === false ? 1 : 0); }
       return 0;
     }
     case "discover":

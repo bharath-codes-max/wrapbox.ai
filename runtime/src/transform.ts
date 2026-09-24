@@ -34,6 +34,12 @@ import {
 // evaluator and another in the transform.
 export type { Constraint, ConstraintKind } from "@wrapbox/policy-core";
 import type { Constraint } from "@wrapbox/policy-core";
+import { dataTypes, type TransformAvailability } from "@wrapbox/registry";
+import crypto from "node:crypto";
+import { vaultKey } from "./vaultkey.js";
+
+/** The wire constraint may carry a registry handler and params (v2 rules). */
+type ConstraintV2 = Constraint & { handler?: string; params?: Record<string, unknown> };
 
 /** Every class this runtime can actually detect and replace. */
 const KNOWN_KINDS: TokenKind[] = ["EMAIL", "PHONE", "CARD", "SSN", "AADHAAR", "NAME", "ADDRESS", "ACCOUNT", "DOB", "ID", "VALUE"];
@@ -46,15 +52,55 @@ const KNOWN_KINDS: TokenKind[] = ["EMAIL", "PHONE", "CARD", "SSN", "AADHAAR", "N
  * rule naming only unknown classes fails closed instead of quietly protecting
  * nothing.
  */
+/**
+ * Registry type → the value kinds this runtime can locate and replace. A
+ * family or prefix expands to every kind beneath it (PII → email, phone, …).
+ * Legacy names (EMAIL, PHONE…) are still accepted. Anything unmapped is
+ * reported as unknown, never guessed.
+ */
+const TYPE_KINDS: Array<[string, TokenKind[]]> = [
+  ["PII.CONTACT.EMAIL", ["EMAIL"]], ["PII.CONTACT.PHONE", ["PHONE"]], ["PII.CONTACT.NAME", ["NAME"]], ["PII.CONTACT.ADDRESS", ["ADDRESS"]],
+  ["PII.IDENTITY.DOB", ["DOB"]], ["PCI.PAN", ["CARD"]], ["PCI", ["CARD"]], ["GOV_ID.US.SSN", ["SSN"]], ["GOV_ID.IN.AADHAAR", ["AADHAAR"]],
+  ["FINANCIAL.ACCOUNT", ["ACCOUNT"]], ["CUSTOMER.ID", ["ID"]], ["HR.EMPLOYEE_ID", ["ID"]], ["PHI.MRN", ["ID"]],
+  ["PII.CONTACT", ["EMAIL", "PHONE", "NAME", "ADDRESS"]], ["PII.IDENTITY", ["DOB"]],
+  ["PII", ["EMAIL", "PHONE", "NAME", "ADDRESS", "DOB", "CARD", "SSN", "AADHAAR", "ACCOUNT"]],
+  ["GOV_ID", ["SSN", "AADHAAR"]], ["CUSTOMER", ["EMAIL", "PHONE", "NAME", "ADDRESS", "ID"]],
+];
+
+export function kindsForType(raw: string): TokenKind[] {
+  const up = String(raw).toUpperCase().trim();
+  const legacy = KNOWN_KINDS.find((k) => k === up);
+  if (legacy) return [legacy];
+  const reg = dataTypes();
+  // Exact or ancestor mapping: the most specific entry that covers the type.
+  let best: { len: number; kinds: TokenKind[] } | null = null;
+  for (const [prefix, kinds] of TYPE_KINDS) {
+    if (reg.isWithin(up, prefix) || up === prefix) { if (!best || prefix.length > best.len) best = { len: prefix.length, kinds }; }
+  }
+  if (best) return best.kinds;
+  // A family prefix that covers mapped descendants (e.g. "PII" handled above; a CUSTOM.<t>.X → ID).
+  if (up.startsWith("CUSTOM.")) return ["ID"];
+  return [];
+}
+
+/** Data types the runtime can actually transform — for the capability snapshot. */
+export const TRANSFORM_AVAILABILITY: TransformAvailability[] = [
+  { handler: "REVERSIBLE_TOKENIZE", formats: ["text", "csv", "tsv", "json"], types: TYPE_KINDS.map(([t]) => t).concat(["CUSTOM"]) },
+  { handler: "REDACT", formats: ["text", "csv", "tsv", "json"], types: TYPE_KINDS.map(([t]) => t).concat(["CUSTOM"]) },
+  { handler: "MASK", formats: ["text", "csv", "tsv", "json"], types: ["PCI.PAN", "PCI", "PII.CONTACT.PHONE", "FINANCIAL.ACCOUNT", "GOV_ID.US.SSN", "GOV_ID.IN.AADHAAR"] },
+  { handler: "HASH", formats: ["text", "csv", "tsv", "json"], types: TYPE_KINDS.map(([t]) => t).concat(["CUSTOM"]) },
+  { handler: "DROP_FIELD", formats: ["csv", "tsv", "json"], types: ["*"] },
+  { handler: "LIMIT", formats: ["text", "csv", "tsv", "json"], types: ["*"] },
+];
+
 function knownClasses(c: Constraint): { kinds: TokenKind[]; unknown: string[] } {
-  const kinds: TokenKind[] = [];
+  const kinds = new Set<TokenKind>();
   const unknown: string[] = [];
   for (const raw of c.classes ?? []) {
-    const up = String(raw).toUpperCase().trim();
-    const hit = KNOWN_KINDS.find((k) => k === up);
-    if (hit) kinds.push(hit); else unknown.push(raw);
+    const ks = kindsForType(String(raw));
+    if (ks.length) ks.forEach((k) => kinds.add(k)); else unknown.push(raw);
   }
-  return { kinds, unknown };
+  return { kinds: [...kinds], unknown };
 }
 
 /** What was protected. Labels and counts — never values. */
@@ -170,7 +216,75 @@ class Tally {
 
 /** Replace one value according to the constraint. */
 function replaceValue(value: string, kind: TokenKind, c: Constraint, field?: string): string {
-  return c.kind === "redact" ? `[REDACTED_${kind}]` : tokenize(value, kind, field);
+  const handler = (c as ConstraintV2).handler ?? (c.kind === "redact" ? "REDACT" : "REVERSIBLE_TOKENIZE");
+  switch (handler) {
+    case "REDACT": return `[REDACTED_${kind}]`;
+    case "MASK": {
+      // Keep the last N characters (default 4) of the digits, mask the rest; format-preserving.
+      const keep = Number(((c as ConstraintV2).params?.keepLast as number | undefined) ?? 4);
+      const ch = String(((c as ConstraintV2).params?.maskChar as string | undefined) ?? "*");
+      const chars = [...value];
+      let seen = 0;
+      const digitsTotal = chars.filter((x) => /[0-9A-Za-z]/.test(x)).length;
+      return chars.map((x) => { if (!/[0-9A-Za-z]/.test(x)) return x; seen++; return seen > digitsTotal - keep ? x : ch; }).join("");
+    }
+    case "HASH": {
+      // HMAC under the vault key: stable within a tenant device, unlinkable outside it.
+      const h = crypto.createHmac("sha256", vaultKey().key).update(`${kind}:${value}`).digest("hex").slice(0, 24);
+      return `<WBH_${kind}_${h}>`;
+    }
+    default: return tokenize(value, kind, field);
+  }
+}
+
+/** DROP_FIELD / LIMIT act on the document shape rather than on values. */
+function applyShapeHandlers(text: string, format: DocFormat, c: ConstraintV2, t: Tally): string | null {
+  const handler = c.handler;
+  if (handler === "DROP_FIELD") {
+    const wanted = c.fields ?? [];
+    if (format === "csv" || format === "tsv") {
+      const table = parseTable(text, format === "tsv" ? "\t" : ",");
+      if (!table) return null;
+      const drop = new Set(matchColumns(table.headers, wanted));
+      if (!drop.size) return text;
+      for (const col of drop) t.add("VALUE", `__dropped__${table.headers[col]}`, table.headers[col]);
+      const keep = table.headers.map((_, i) => i).filter((i) => !drop.has(i));
+      return serialiseTable({ ...table, headers: keep.map((i) => table.headers[i]), rows: table.rows.map((r) => keep.map((i) => r[i] ?? "")) });
+    }
+    if (format === "json") {
+      let parsed: unknown; try { parsed = JSON.parse(text); } catch { return null; }
+      const strip = (v: unknown): unknown => {
+        if (Array.isArray(v)) return v.map(strip);
+        if (v && typeof v === "object") {
+          const out: Record<string, unknown> = {};
+          for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+            if (wanted.some((w) => columnMatches(k, w))) { t.add("VALUE", `__dropped__${k}`, k); continue; }
+            out[k] = strip(val);
+          }
+          return out;
+        }
+        return v;
+      };
+      return JSON.stringify(strip(parsed));
+    }
+    return null;
+  }
+  if (handler === "LIMIT") {
+    const p = c.params ?? {};
+    const maxRows = Number(p.maxRows ?? 0), maxLines = Number(p.maxLines ?? 0), maxBytes = Number(p.maxBytes ?? 0);
+    let out = text;
+    if ((format === "csv" || format === "tsv") && maxRows > 0) {
+      const table = parseTable(text, format === "tsv" ? "\t" : ",");
+      if (!table) return null;
+      if (table.rows.length > maxRows) { t.add("VALUE", `__limited__rows`, "rows"); out = serialiseTable({ ...table, rows: table.rows.slice(0, maxRows) }); }
+    } else if (maxLines > 0) {
+      const lines = out.split("\n");
+      if (lines.length > maxLines) { t.add("VALUE", `__limited__lines`, "lines"); out = lines.slice(0, maxLines).join("\n"); }
+    }
+    if (maxBytes > 0 && Buffer.byteLength(out) > maxBytes) { t.add("VALUE", `__limited__bytes`, "bytes"); out = Buffer.from(out).subarray(0, maxBytes).toString("utf-8"); }
+    return out;
+  }
+  return text;
 }
 
 /* ------------------------------------------------------------------ *
@@ -276,6 +390,16 @@ export function transformDocument(
   // constraint that names ONLY unknown classes and no fields would protect
   // nothing while reporting success — refuse it instead.
   const { kinds, unknown } = knownClasses(c);
+  const handler = (c as ConstraintV2).handler;
+  if (handler === "DROP_FIELD" || handler === "LIMIT") {
+    const t0 = new Tally();
+    const neutral = neutraliseTokenLookalikes(body.toString("utf-8"));
+    t0.lookalikes = neutral.found;
+    const out0 = applyShapeHandlers(neutral.text, format, c as ConstraintV2, t0);
+    if (out0 === null) return { ok: false, reason: `Wrapbox could not read this ${format.toUpperCase()} well enough to apply ${handler}.`, format };
+    const report0 = t0.report(format);
+    return { ok: true, body: Buffer.from(out0, "utf-8"), report: report0, changed: out0 !== neutral.text || report0.lookalikes > 0 };
+  }
   if (!(c.fields?.length) && !kinds.length) {
     return {
       ok: false,

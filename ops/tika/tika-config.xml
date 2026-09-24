@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Wrapbox Tika sidecar configuration.
+
+  WHY forking: the server process only supervises; every parse runs in a
+  forked child JVM with its own heap cap. A parser that hangs, OOMs or crashes
+  on a hostile document kills the child, the supervisor restarts it, and the
+  request that triggered it comes back as an error the runtime maps to
+  UNINSPECTABLE.PARSER_FAILURE / TIMEOUT. Nothing here can make a document
+  "pass" — a dead child is a fail-closed answer, never an empty one.
+
+  Element names follow the Tika Server configuration reference
+  (cwiki.apache.org/confluence/display/TIKA/TikaServer).
+-->
+<properties>
+  <server>
+    <params>
+      <port>9998</port>
+      <host>0.0.0.0</host>
+      <!-- Always fork; the supervising JVM never parses. -->
+      <noFork>false</noFork>
+      <!-- A single parse may take at most 30 s (matches the runtime's timeoutMs);
+           the child is killed and restarted past this. -->
+      <taskTimeoutMillis>30000</taskTimeoutMillis>
+      <taskPulseMillis>1000</taskPulseMillis>
+      <maxForkedStartupMillis>120000</maxForkedStartupMillis>
+      <!-- Restart the child forever: a crash must never leave the sidecar dead. -->
+      <maxRestarts>-1</maxRestarts>
+      <!-- Recycle the child after this many files to bound leaked native memory. -->
+      <maxFiles>1000</maxFiles>
+      <forkedJvmArgs>
+        <arg>-Xmx1g</arg>
+        <arg>-Djava.awt.headless=true</arg>
+        <arg>-Dlog4j2.formatMsgNoLookups=true</arg>
+      </forkedJvmArgs>
+      <!-- Never expose the fetcher/emitter/unpack-anywhere features. -->
+      <enableUnsecureFeatures>false</enableUnsecureFeatures>
+      <!-- Stack traces would leak file names into responses; the runtime does not need them. -->
+      <returnStackTrace>false</returnStackTrace>
+      <logLevel>info</logLevel>
+    </params>
+  </server>
+  <!--
+    OCR: the apache/tika "-full" image ships Tesseract and Tika's
+    TesseractOCRParser is enabled by default in it. It is deliberately NOT
+    configured here — leaving the default keeps OCR on in the full image and
+    absent (not faked) in the minimal one, so `wrapboxd capabilities` reports
+    what the deployed image can actually do.
+  -->
+</properties>

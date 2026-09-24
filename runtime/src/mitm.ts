@@ -25,7 +25,9 @@ import tls from "node:tls";
 import net from "node:net";
 import type { Duplex } from "node:stream";
 import { secureContextFor } from "./ca.js";
-import { classifyContent, describeClassification, type Classification } from "./classify.js";
+import { classifyContentAsync, describeClassification, uninspectableClassification, type Classification } from "./classify.js";
+import { tenantDestinations } from "./tenant.js";
+import type { EvidenceV2 } from "@wrapbox/registry";
 import { boundedInflate } from "./parsers.js";
 import { transformBody, describeTransform, type Constraint, type TransformReport } from "./transform.js";
 import { createStreamRestorer, hasTokens, restore } from "./tokenize.js";
@@ -67,7 +69,13 @@ export const DEFAULT_NO_INSPECT: RegExp[] = [
 ];
 
 export function shouldInspect(host: string, extraBypass: RegExp[] = []): boolean {
-  return ![...DEFAULT_NO_INSPECT, ...extraBypass].some((re) => re.test(host));
+  // The never-decrypt decision lives in the Destination Registry now (a
+  // catalogue service always beats an exemption pattern, so Copilot on
+  // copilot.microsoft.com is inspected while update.microsoft.com is not).
+  // DEFAULT_NO_INSPECT is retained only as the seed the registry was built
+  // from and for operator --no-inspect overrides.
+  if (extraBypass.some((re) => re.test(host))) return false;
+  return tenantDestinations().shouldInspect(host);
 }
 
 /* ------------------------------------------------------------------ *
@@ -93,6 +101,8 @@ export interface EgressVerdict {
   pulled_at: string | null;
   /** Present when effect is "constrain" — what the body transform must protect. */
   constraint?: Constraint | null;
+  /** Evidence v2 for the receipt (built by the decision, enriched by the transform). */
+  evidence?: EvidenceV2;
 }
 
 export interface MitmContext {
@@ -258,12 +268,21 @@ function handleDecrypted(ctx: MitmContext, req: http.IncomingMessage, res: http.
 
     // ── Nothing has been forwarded. The upstream connection does not exist
     //    yet. Everything is still recoverable at this point. ──
-    const classification: Classification = oversize
-      ? { kinds: [], findings: [], filenames: [], bytes: size, truncated: true, hasFileUpload: false, format: "unknown", inspectable: false, inspectReason: "payload too large to inspect" }
+    const classified: Promise<Classification> = oversize
+      ? Promise.resolve(uninspectableClassification("OVERSIZE", "payload too large to inspect", size))
       : decodeRefused
-      ? { kinds: [], findings: [], filenames: [], bytes: size, truncated: true, hasFileUpload: false, format: "binary", inspectable: false, inspectReason: `content-encoding ${enc} could not be safely decompressed (possible decompression bomb)` }
-      : classifyContent(decodeBody(body, req.headers), String(req.headers["content-type"] ?? ""));
+      ? Promise.resolve(uninspectableClassification("DECOMPRESSION_REFUSED", `content-encoding ${enc} could not be safely decompressed (possible decompression bomb)`, size))
+      : classifyContentAsync(decodeBody(body, req.headers), String(req.headers["content-type"] ?? ""))
+          // A pipeline failure is not "clean": fail closed with an explicit state.
+          .catch((e: Error) => uninspectableClassification("PARSER_FAILURE", `inspection failed: ${e.message.slice(0, 120)}`, size));
 
+    void classified.then((classification) => afterClassification(ctx, req, res, body, size, oversize, classification));
+  });
+}
+
+function afterClassification(ctx: MitmContext, req: http.IncomingMessage, res: http.ServerResponse, body: Buffer, size: number, oversize: boolean, classification: Classification): void {
+  {
+    void size;
     if (process.env.WRAPBOX_DEBUG_BODY && body.length > 0) {
       const enc = String(req.headers["content-encoding"] ?? "none");
       const decoded = decodeBody(body, req.headers);
@@ -347,7 +366,7 @@ function handleDecrypted(ctx: MitmContext, req: http.IncomingMessage, res: http.
     }
 
     forwardUpstream(ctx, req, res, body);
-  });
+  }
 }
 
 function sendBlockPage(
@@ -537,11 +556,16 @@ function handleUpgrade(ctx: MitmContext, req: http.IncomingMessage, socket: Dupl
     method: "UPGRADE",
     path: req.url || "/",
     headers: req.headers,
-    classification: { kinds: [], findings: [], filenames: [], bytes: 0, truncated: false, hasFileUpload: false, format: "unknown", inspectable: true },
+    // Frames inside a WebSocket are not inspected. Say so: the decision runs
+    // through the fail-closed gate, which BLOCKS wherever a content protection
+    // could apply to this destination and allows only where none could.
+    classification: uninspectableClassification("TRANSPORT", "WebSocket upgrade — frames are not inspected", 0),
     uninspected: true,
   });
 
-  if (verdict.effect === "block") {
+  // CONSTRAIN cannot rewrite frames and REVIEW has no body to show an approver:
+  // both are refusals here, never a pass-through.
+  if (verdict.effect !== "allow") {
     try { socket.end("HTTP/1.1 403 Forbidden\r\n\r\n"); } catch { /* ignore */ }
     return;
   }

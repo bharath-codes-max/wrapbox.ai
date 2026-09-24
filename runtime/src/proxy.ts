@@ -32,6 +32,8 @@ import { makeReceipt, appendToSpool } from "./receipts.js";
 import { interceptTls, shouldInspect, closeMitm, type EgressRequest, type EgressVerdict } from "./mitm.js";
 import { caExists } from "./ca.js";
 import { describeClassification, RUNTIME_CONTENT_KINDS, RUNTIME_FINDING_LABELS } from "./classify.js";
+import { tenantDestinations } from "./tenant.js";
+import { dataTypes, registryPins, type EvidenceV2, type DestinationClass } from "@wrapbox/registry";
 import { describeTransform, type TransformReport } from "./transform.js";
 import { identifyClient, identifyService, isSignificant, isNoisePath } from "./identify.js";
 import { openApproval, readApproval } from "./api.js";
@@ -117,9 +119,16 @@ function decide(host: string, port: number, agent: string, deferModelApiGuard = 
     };
   }
   const rules = applyProjectFilter(cached.rules, undefined);
+  const dest = tenantDestinations().classify(host);
   const call: ToolCall = {
     tool_name: "network.connect",
-    tool_input: { host, port, agent },
+    tool_input: {
+      host, port, agent,
+      // The destination CLASS is known before any byte is decrypted, so a
+      // class-scoped rule ("nothing to KNOWN_AI_UNAPPROVED") fires here too.
+      destination_class: dest.class, ...(dest.service ? { service: dest.service } : {}),
+      inspection: "host_only", carrier: "connect",
+    },
   };
   const r = evaluate(call, rules);
   const matched = r.matched_rule_id ? cached.rules.find((x) => x.id === r.matched_rule_id) : undefined;
@@ -234,6 +243,9 @@ function decideEgress(
   }
 
   const rules = applyProjectFilter(cached.rules, undefined);
+  const dest = tenantDestinations().classify(r.host, r.path);
+  const c2 = r.classification;
+  const carrier = c2.inspection !== "inspected" ? "uninspectable" : c2.hasFileUpload ? "upload" : "body";
   const call: ToolCall = {
     tool_name: "network.egress",
     tool_input: {
@@ -242,6 +254,13 @@ function decideEgress(
       method: r.method,
       path: r.path,
       agent,
+      // ── v2: what registry-driven rules match on ──
+      destination_class: dest.class, ...(dest.service ? { service: dest.service } : {}),
+      findings_v2: c2.typed.map((f) => ({ type: f.type, count: f.count, confidence: f.confidence })),
+      finding_types: c2.types,
+      inspection: c2.inspection, ...(c2.state ? { uninspectable_state: c2.state } : {}),
+      carrier,
+      extractor: c2.extractor,
       // Trusted device identity (§5): the daemon runs on an enrolled device with
       // a signing key, so it can attribute the DEVICE for every request it sees.
       // This is a real, verifiable signal — unlike the User-Agent, which is only
@@ -273,8 +292,13 @@ function decideEgress(
   // consistent with policy, so an uninspectable body is not punished needlessly.
   let failClosed = false;
   if (!r.classification.inspectable) {
+    // Worst case = every registry type present, in bulk, at high confidence,
+    // on the uploaded/uninspectable carrier. If ANY protection would fire for
+    // this destination, the unreadable body is blocked.
     const worst = evaluate(
-      { ...call, tool_input: { ...call.tool_input, content_kinds: RUNTIME_CONTENT_KINDS, findings: RUNTIME_FINDING_LABELS, has_file_upload: true } },
+      { ...call, tool_input: { ...call.tool_input, content_kinds: RUNTIME_CONTENT_KINDS, findings: RUNTIME_FINDING_LABELS, has_file_upload: true,
+        findings_v2: [...dataTypes().ids().map((t) => ({ type: t, count: 1_000_000, confidence: "high" })), ...c2.typed.map((f) => ({ type: f.type, count: f.count, confidence: f.confidence }))],
+        finding_types: dataTypes().ids(), carrier: "uninspectable" } },
       rules,
     );
     if (worst.effect === "block" || worst.effect === "review" || worst.effect === "constrain") {
@@ -312,6 +336,7 @@ function decideEgress(
     rule_id: matched?.id ?? null,
     degraded: !cached.fresh,
     pulled_at: cached.pulled_at,
+    evidence: buildEvidence(r, dest.class, dest.service, matched, d.effect, failClosed, c2.inspectable ? undefined : (worstCauseOf(r) )),
   };
 
   // Attribution for the evidence trail — never an input to the decision above.
@@ -477,6 +502,39 @@ function recordConstrain(cfg: Config, report: TransformReport): void {
   writeEgressReceipt(cfg, p.r, p.agent, p.session, p.v, p.client, p.service, report);
 }
 
+/** Evidence v2 for one egress decision. Values never appear here. */
+function buildEvidence(
+  r: EgressRequest, destClass: DestinationClass, service: string | undefined,
+  matched: (Rule & { meta?: unknown; clause_id?: string | null; contract_id?: string | null; description?: string | null }) | undefined,
+  effect: EgressVerdict["effect"], failClosed: boolean, failCause?: EvidenceV2["fail_closed"],
+): EvidenceV2 {
+  const c = r.classification;
+  const meta = (matched as { meta?: { clause_id?: string; contract_id?: string; kind?: "clause" | "carrier"; coverage?: EvidenceV2["capability_status"] } } | undefined)?.meta;
+  return {
+    ev: 2,
+    ...(meta?.contract_id ? { contract_id: meta.contract_id } : {}),
+    ...(meta?.clause_id ? { clause_id: meta.clause_id } : {}),
+    ...(meta?.kind ? { rule_kind: meta.kind } : {}),
+    types: c.types,
+    findings: c.typed.map((f) => ({ type: f.type, count: f.count, confidence: f.confidence, detector: f.detector, version: f.version, ...(f.label ? { label: f.label } : {}), ...(f.unitPath ? { unitPath: f.unitPath } : {}), ...(f.fields?.length ? { fields: f.fields } : {}) })),
+    extractor: c.extractor,
+    inspection: c.inspection,
+    ...(c.state ? { uninspectable_state: c.state } : {}),
+    destination_class: destClass,
+    ...(service ? { service } : {}),
+    plane: "network",
+    final_action: effect,
+    ...(meta?.coverage ? { capability_status: meta.coverage } : {}),
+    ...(failClosed && failCause ? { fail_closed: failCause } : {}),
+    ...(meta?.kind === "carrier" ? { fail_closed: { cause: "carrier_rule", detail: (matched?.description ?? "unenforceable clause — carrier rule") } } : {}),
+    pins: registryPins(),
+  };
+}
+
+function worstCauseOf(r: EgressRequest): EvidenceV2["fail_closed"] {
+  return { cause: "uninspectable", detail: `${r.classification.state ?? "UNKNOWN"}: ${r.classification.inspectReason ?? "body could not be inspected"} — a protection could apply here, so it was not forwarded` };
+}
+
 function writeEgressReceipt(
   cfg: Config,
   r: EgressRequest,
@@ -520,6 +578,7 @@ function writeEgressReceipt(
       degraded: v.degraded,
       ...(client ? { client: client.id, client_label: client.label } : {}),
       ...(service?.id ? { service: service.id, service_label: service.label } : {}),
+      ...(v.evidence ? { evidence: transform ? { ...v.evidence, transform: { handler: (v.constraint as { handler?: string } | null | undefined)?.handler ?? (v.constraint?.kind === "redact" ? "REDACT" : "REVERSIBLE_TOKENIZE"), protected: transform.protected.map((x) => ({ type: x.kind, count: x.count })), fields: transform.fields } } : v.evidence } : {}),
     });
     appendToSpool(receipt);
   } catch (err) {

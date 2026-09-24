@@ -7,6 +7,7 @@
  * First matching rule wins.
  * No matching rule = BLOCK (fail closed — the core security guarantee).
  */
+const KNOWN_HANDLERS = new Set(["REDACT", "MASK", "REVERSIBLE_TOKENIZE", "HASH", "DROP_FIELD", "GENERALIZE", "DATE_SHIFT", "FORMAT_PRESERVING", "LIMIT", "REWRITE"]);
 /** Parse a rule's stored constraint JSON. Returns null on anything malformed —
  *  the caller must then treat the rule as unenforceable, never as a plain
  *  allow. */
@@ -21,10 +22,17 @@ export function parseConstraint(raw) {
             return null;
         const fields = Array.isArray(p.fields) ? p.fields.filter((f) => typeof f === "string" && f.trim()) : [];
         const classes = Array.isArray(p.classes) ? p.classes.filter((c) => typeof c === "string" && c.trim()) : [];
-        // A constraint that names nothing protects nothing.
-        if (!fields.length && !classes.length)
+        const handler = typeof p.handler === "string" && KNOWN_HANDLERS.has(p.handler) ? p.handler : undefined;
+        if (typeof p.handler === "string" && !handler)
+            return null; // an unknown handler cannot be applied
+        const params = p.params && typeof p.params === "object" && !Array.isArray(p.params) ? p.params : undefined;
+        // A constraint that names nothing protects nothing — except a shape
+        // handler (LIMIT) whose target is the document itself.
+        if (!fields.length && !classes.length && handler !== "LIMIT")
             return null;
-        return { kind: p.kind, ...(fields.length ? { fields } : {}), ...(classes.length ? { classes } : {}) };
+        if (handler === "LIMIT" && !params)
+            return null;
+        return { kind: p.kind, ...(fields.length ? { fields } : {}), ...(classes.length ? { classes } : {}), ...(handler ? { handler } : {}), ...(params ? { params } : {}) };
     }
     catch {
         return null;

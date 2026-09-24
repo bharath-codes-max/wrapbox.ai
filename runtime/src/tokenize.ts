@@ -31,6 +31,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { PATHS } from "./config.js";
+import { seal, open as unseal, isSealed } from "./vaultkey.js";
 
 /** Value classes we can tokenize. Kept deliberately small — each one needs a
  *  detector that is precise enough that a false positive does not corrupt
@@ -71,6 +72,8 @@ interface VaultEntry {
 }
 
 const VAULT_FILE = () => path.join(PATHS.home, "token-vault.jsonl");
+/** The sealed store. The plaintext .jsonl is only ever read for migration and then shredded. */
+const VAULT_SEALED = () => path.join(PATHS.home, "token-vault.sealed");
 
 /** Values live only for this long. A conversation the model is still quoting
  *  from stays restorable; a vault that grows forever does not. */
@@ -99,7 +102,20 @@ class Vault {
 
   private load(): void {
     try {
-      const raw = fs.readFileSync(VAULT_FILE(), "utf-8");
+      let raw = "";
+      let migrated = false;
+      try {
+        const blob = fs.readFileSync(VAULT_SEALED());
+        const pt = isSealed(blob) ? unseal(blob) : null;
+        // A sealed file we cannot open (key changed, tampered) yields nothing —
+        // tokens stop resolving rather than a corrupted map being trusted.
+        raw = pt ? pt.toString("utf-8") : "";
+      } catch { /* no sealed vault yet */ }
+      if (!raw) {
+        // One-time migration from the plaintext format.
+        try { raw = fs.readFileSync(VAULT_FILE(), "utf-8"); migrated = raw.length > 0; } catch { /* none */ }
+      }
+      if (migrated) this.dirty = true;
       const now = Date.now();
       for (const line of raw.split("\n")) {
         if (!line.trim()) continue;
@@ -117,15 +133,22 @@ class Vault {
     } catch { /* no vault yet */ }
   }
 
-  /** Append-only flush. Written 0600: this file is the plaintext the whole
-   *  feature exists to keep off the network. */
+  /** Full rewrite, SEALED (AES-256-GCM, key in the Keychain or a 0600 key
+   *  file — see vaultkey.ts). The plaintext file, if one is left over from
+   *  the previous format, is overwritten and removed on the first flush. */
   flush(): void {
     if (!this.dirty) return;
     try {
       fs.mkdirSync(PATHS.home, { recursive: true });
       const body = [...this.byToken.values()].map((e) => JSON.stringify(e)).join("\n") + "\n";
-      fs.writeFileSync(VAULT_FILE(), body, { mode: 0o600 });
-      fs.chmodSync(VAULT_FILE(), 0o600);
+      const tmp = VAULT_SEALED() + ".tmp-" + process.pid;
+      fs.writeFileSync(tmp, seal(Buffer.from(body, "utf-8")), { mode: 0o600 });
+      fs.renameSync(tmp, VAULT_SEALED());
+      try {
+        const st = fs.statSync(VAULT_FILE());
+        fs.writeFileSync(VAULT_FILE(), Buffer.alloc(st.size, 0));   // shred, then remove
+        fs.unlinkSync(VAULT_FILE());
+      } catch { /* no plaintext leftover */ }
       this.dirty = false;
     } catch { /* an unwritable vault degrades to memory-only, which still works
                  for the life of this process */ }
@@ -163,6 +186,7 @@ class Vault {
     this.counters.clear();
     this.rotate();
     try { fs.unlinkSync(VAULT_FILE()); } catch { /* already gone */ }
+    try { fs.unlinkSync(VAULT_SEALED()); } catch { /* already gone */ }
     this.dirty = false;
   }
 }
