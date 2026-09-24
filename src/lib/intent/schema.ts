@@ -33,7 +33,7 @@
  * ------------------------------------------------------------------ */
 
 /** policy-core's ops — the only ones that compile 1:1 onto the network plane. */
-export type CoreOp = "equals" | "contains" | "not_contains" | "starts_with" | "regex" | "lt" | "gt" | "lte" | "gte";
+export type CoreOp = "equals" | "contains" | "not_contains" | "starts_with" | "regex" | "lt" | "gt" | "lte" | "gte" | "any_of" | "none_of" | "has" | "finding";
 /** Canonical superset. Extensions LOWER to a CoreOp at compile (glob→regex, in→regex); meaning never changes. */
 export type Op = CoreOp | "in" | "not_in" | "glob";
 
@@ -124,11 +124,15 @@ export interface DestinationSelector {             // 4. WHERE it's going (prese
   /** A built-in kind of destination. Only meaningful when the admin genuinely
    *  said "all/any external AI"; a named list must NOT become a category. */
   category?: DestinationCategory[];
+  /** Destination Registry classes (APPROVED_AI, ANY_EXTERNAL, UNKNOWN_EXTERNAL…).
+   *  Resolved by the RUNTIME per request, so a host nobody catalogued still
+   *  falls under a class — the fix for the "unknown AI escapes" gap. */
+  classes?: string[];
   agentVendor?: string[];
   trust?: "internal" | "external";
   /** The COMPLEMENT: "any other destination", "anywhere except X". Lowers to a
    *  host predicate that matches everything NOT in the set. */
-  notIn?: { group?: string; service?: string[]; host?: string[] };
+  notIn?: { group?: string; service?: string[]; host?: string[]; classes?: string[] };
   /** An admin-designated set the parser could not tie to a group definition.
    *  It is a LABEL, not a matcher — unresolvable until the admin names members. */
   namedSet?: string;
@@ -137,7 +141,14 @@ export interface DestinationSelector {             // 4. WHERE it's going (prese
 
 export interface DataSelector {                    // 5. OPTIONAL facet — NEVER the spine
   any?: true;
-  classes?: string[];                              // open vocab: "PII" "EMAIL" "PHONE" "SECRET" "CARD" "SSN" …
+  /** Registry ids (PII.CONTACT.EMAIL, CREDENTIAL, CUSTOM.<tenant>.X). The validator
+   *  resolves the admin's phrases through the Data Type Registry; unresolved
+   *  phrases become CUSTOM candidates flagged pending — never guessed. */
+  classes?: string[];
+  /** Count / confidence semantics — POLICY, not detector configuration. */
+  match?: { minCount: number; minConfidence: "low" | "medium" | "high"; scope: "any" | "bulk"; origin: "clause" | "registry" | "inherited" };
+  /** Phrases the registry could not resolve, kept verbatim for the admin. */
+  unresolved?: string[];
   fields?: string[];                               // column / JSON-key names
   /** PROVENANCE / ownership — separate from class (§7). "Verizon customer
    *  data" is class=PII, owner="Verizon". Ownership is NOT inferred from the
@@ -256,6 +267,13 @@ export interface IntentClause {
 
   // enforcement reality (a derivation)
   binding: EnforcementBinding;
+
+  /** What happens when a required capability is missing on the deployed plane.
+   *  Protections default to hold_activation: the contract cannot go live
+   *  until the admin chooses to block the carrier, require review, or accept
+   *  the risk (recorded, signed by an identity). ALLOW clauses never need it. */
+  onUnsupported?: "hold_activation" | "block" | "review" | "accept_risk";
+  acceptRisk?: { by: string; reason: string; at: string };
 
   // authority + provenance
   authority: "ceiling";                            // the contract grants AT MOST this

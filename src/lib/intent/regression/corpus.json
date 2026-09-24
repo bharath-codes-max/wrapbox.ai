@@ -108,8 +108,8 @@
       "perplexity.ai"
      ],
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -123,7 +123,8 @@
      "kind": "catchAllPresent"
     }
    ]
-  }
+  },
+  "note": "v2: a protection over 'any external AI' pins on the destination CLASS (APPROVED_AI|KNOWN_AI_UNAPPROVED|UNKNOWN_EXTERNAL), not the catalogue host list \u2014 an uncatalogued host no longer escapes (audit G2)"
  },
  {
   "id": "neg-03-is-not-permitted-named-pair-not-widened",
@@ -170,7 +171,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -370,14 +371,13 @@
      "decision": "BLOCK",
      "action": "disclose",
      "resourceType": "any",
-     "status": "degraded",
+     "status": "enforced",
      "plane": "network",
      "effectiveDecision": "BLOCK",
-     "unenforcedFacets": [
-      "destination"
-     ],
+     "unenforcedFacets": [],
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ],
      "predicateFieldsAbsent": [
       "tool_input.host"
@@ -391,15 +391,11 @@
      "decision": "ALLOW"
     },
     {
-     "kind": "statusIs",
-     "clauseIndex": 0,
-     "status": "enforced"
-    },
-    {
      "kind": "catchAllPresent"
     }
    ]
-  }
+  },
+  "note": "v2: 'outside the company' resolves to the ANY_EXTERNAL destination class (runtime-classified), so the destination IS enforced"
  },
  {
   "id": "neg-08-never-allow-post-secrets-slack-notion",
@@ -451,7 +447,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -597,7 +593,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -666,7 +662,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -1142,7 +1138,7 @@
       "destination"
      ],
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "predicateFieldsAbsent": [
       "tool_input.host"
@@ -1232,7 +1228,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -1302,7 +1298,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -1696,7 +1692,7 @@
      "plane": "network",
      "effectiveDecision": "BLOCK",
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "predicateFieldsAbsent": [
       "tool_input.filenames",
@@ -1803,8 +1799,8 @@
      "plane": "network",
      "effectiveDecision": "CONSTRAIN",
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "chatgpt.com",
@@ -1823,7 +1819,7 @@
      "effectiveDecision": "ALLOW",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "wiki.corp.acme.com"
@@ -1844,7 +1840,8 @@
      "kind": "catchAllPresent"
     }
    ]
-  }
+  },
+  "note": "v2: a protection over 'any external AI' pins on the destination CLASS (APPROVED_AI|KNOWN_AI_UNAPPROVED|UNKNOWN_EXTERNAL), not the catalogue host list \u2014 an uncatalogued host no longer escapes (audit G2)"
  },
  {
   "id": "exc-07-tokenise-unless-internal-unresolvable-never-enforced",
@@ -1897,8 +1894,8 @@
      "plane": "network",
      "effectiveDecision": "CONSTRAIN",
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "chatgpt.com",
@@ -1908,33 +1905,28 @@
     {
      "decision": "ALLOW",
      "action": "disclose",
-     "status": "degraded",
+     "status": "enforced",
      "plane": "network",
      "effectiveDecision": "ALLOW",
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ],
      "predicateFieldsAbsent": [
       "tool_input.host"
      ],
-     "unenforcedFacets": [
-      "destination"
-     ]
+     "unenforcedFacets": []
     }
    ],
    "compiledCount": 2,
    "mustNot": [
     {
-     "kind": "statusIs",
-     "clauseIndex": 1,
-     "status": "enforced"
-    },
-    {
      "kind": "anyClauseWithDecision",
      "decision": "BLOCK"
     }
    ]
-  }
+  },
+  "note": "v2: 'any AI model' / 'somewhere internal' resolve to destination classes; enforced, not degraded"
  },
  {
   "id": "exc-08-all-environments-except-production-review-with-approver",
@@ -2407,7 +2399,7 @@
      "plane": "network",
      "effectiveDecision": "BLOCK",
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "predicateFieldsAbsent": [
       "tool_input.host"
@@ -3772,7 +3764,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destNotHostsInclude": [
       "chatgpt.com",
@@ -3849,7 +3841,7 @@
       "data.classes"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds",
+      "tool_input.findings_v2",
       "tool_input.host"
      ],
      "destNotHostsInclude": [
@@ -4242,7 +4234,7 @@
      "plane": "network",
      "effectiveDecision": "BLOCK",
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "predicateFieldsAbsent": [
       "tool_input.host"
@@ -4274,7 +4266,7 @@
      "effectiveDecision": "ALLOW",
      "predicateFieldsAbsent": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -4967,7 +4959,7 @@
      "effectiveDecision": "CONSTRAIN",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destNotHostsInclude": [
       "chatgpt.com",
@@ -5075,7 +5067,7 @@
       "tool_input.host"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -5204,8 +5196,8 @@
       "drive.google.com"
      ],
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -5219,7 +5211,8 @@
      "host": "slack.com"
     }
    ]
-  }
+  },
+  "note": "v2: a protection over 'any external AI' pins on the destination CLASS (APPROVED_AI|KNOWN_AI_UNAPPROVED|UNKNOWN_EXTERNAL), not the catalogue host list \u2014 an uncatalogued host no longer escapes (audit G2)"
  },
  {
   "id": "dest-004-approved-ai-tools-undefined-is-namedset",
@@ -5668,8 +5661,8 @@
       "slack.com"
      ],
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -5691,7 +5684,7 @@
       "tool_input.host"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -5700,7 +5693,8 @@
      "kind": "catchAllPresent"
     }
    ]
-  }
+  },
+  "note": "v2: a protection over 'any external AI' pins on the destination CLASS (APPROVED_AI|KNOWN_AI_UNAPPROVED|UNKNOWN_EXTERNAL), not the catalogue host list \u2014 an uncatalogued host no longer escapes (audit G2)"
  },
  {
   "id": "dest-011-synonym-sentences-dedupe-to-one-clause",
@@ -5851,24 +5845,17 @@
   ],
   "expect": {
    "clauseCount": 1,
-   "compiledCount": 0,
+   "compiledCount": 1,
    "clauses": [
     {
      "decision": "BLOCK",
      "action": "disclose",
-     "status": "understood_only",
+     "status": "enforced",
      "plane": "network",
-     "unenforcedFacets": [
-      "destination"
-     ]
+     "unenforcedFacets": []
     }
    ],
    "mustNot": [
-    {
-     "kind": "statusIs",
-     "clauseIndex": 0,
-     "status": "enforced"
-    },
     {
      "kind": "anyClauseWithDecision",
      "decision": "ALLOW"
@@ -5878,7 +5865,8 @@
      "host": "chatgpt.com"
     }
    ]
-  }
+  },
+  "note": "v2: external trust alone = ANY_EXTERNAL class \u2014 an uncatalogued host no longer escapes (audit G5)"
  },
  {
   "id": "dest-014-alias-and-hyphen-variants-resolve",
@@ -6427,7 +6415,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "chatgpt.com",
@@ -6447,7 +6435,7 @@
      "effectiveDecision": "REVIEW",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -6458,7 +6446,7 @@
      "effectiveDecision": "CONSTRAIN",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -6476,7 +6464,7 @@
       "tool_input.filenames"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsExclude": [
       "gemini.google.com"
@@ -6591,7 +6579,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "chatgpt.com",
@@ -6607,12 +6595,12 @@
     {
      "decision": "CONSTRAIN",
      "action": "disclose",
-     "status": "enforced",
+     "status": "degraded",
      "plane": "network",
      "effectiveDecision": "CONSTRAIN",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "chatgpt.com",
@@ -6635,7 +6623,7 @@
       "tool_input.host"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsExclude": [
       "copilot.microsoft.com",
@@ -6661,7 +6649,8 @@
      "kind": "catchAllPresent"
     }
    ]
-  }
+  },
+  "note": "v2: PII.CONTACT.NAME has no available detector (NER plugin not configured) \u2192 the tokenize clause is degraded, enforced on email/phone"
  },
  {
   "id": "prec-003-allow-written-last",
@@ -6800,7 +6789,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -6810,7 +6799,7 @@
      "effectiveDecision": "REVIEW",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -6820,7 +6809,7 @@
      "effectiveDecision": "CONSTRAIN",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -6926,8 +6915,8 @@
       "slack.com"
      ],
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -6965,7 +6954,8 @@
      "status": "understood_only"
     }
    ]
-  }
+  },
+  "note": "v2: a protection over 'any external AI' pins on the destination CLASS (APPROVED_AI|KNOWN_AI_UNAPPROVED|UNKNOWN_EXTERNAL), not the catalogue host list \u2014 an uncatalogued host no longer escapes (audit G2)"
  },
  {
   "id": "prec-005-subject-scoped-allow-degrades-block-does-not",
@@ -7039,7 +7029,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "claude.ai",
@@ -7186,7 +7176,7 @@
      "sourcesCount": 3,
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -7318,7 +7308,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "claude.ai"
@@ -7331,7 +7321,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "claude.ai"
@@ -7519,8 +7509,8 @@
      "plane": "network",
      "effectiveDecision": "BLOCK",
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "chatgpt.com",
@@ -7557,7 +7547,8 @@
      "kind": "catchAllPresent"
     }
    ]
-  }
+  },
+  "note": "v2: a protection over 'any external AI' pins on the destination CLASS (APPROVED_AI|KNOWN_AI_UNAPPROVED|UNKNOWN_EXTERNAL), not the catalogue host list \u2014 an uncatalogued host no longer escapes (audit G2)"
  },
  {
   "id": "prec-010-unobservable-class-block-sorts-first-but-does-not-compile",
@@ -7642,21 +7633,16 @@
     "CONSTRAIN",
     "ALLOW"
    ],
-   "compiledCount": 2,
+   "compiledCount": 3,
    "clauses": [
     {
      "decision": "BLOCK",
      "action": "disclose",
-     "status": "understood_only",
+     "status": "enforced",
      "plane": "network",
      "effectiveDecision": "BLOCK",
-     "unenforcedFacets": [
-      "data.classes"
-     ],
-     "predicateFieldsAbsent": [
-      "tool_input.host",
-      "tool_input.content_kinds"
-     ]
+     "unenforcedFacets": [],
+     "predicateFieldsAbsent": []
     },
     {
      "decision": "CONSTRAIN",
@@ -7666,7 +7652,7 @@
      "effectiveDecision": "CONSTRAIN",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "chatgpt.com",
@@ -7696,11 +7682,6 @@
     {
      "kind": "statusIs",
      "clauseIndex": 0,
-     "status": "enforced"
-    },
-    {
-     "kind": "statusIs",
-     "clauseIndex": 0,
      "status": "degraded"
     },
     {
@@ -7709,7 +7690,8 @@
     }
    ]
   },
-  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass.",
+  "note": "v2: cardholder data (PCI.PAN) is detectable and compiles"
  },
  {
   "id": "prec-011-partially-observable-block-degrades-still-first",
@@ -7776,7 +7758,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "claude.ai",
@@ -7882,7 +7864,7 @@
       "tool_input.host"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destNotHostsInclude": [
       "chatgpt.com",
@@ -8048,7 +8030,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "predicateFieldsAbsent": [
       "tool_input.filenames"
@@ -8061,7 +8043,7 @@
      "effectiveDecision": "REVIEW",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -8071,7 +8053,7 @@
      "effectiveDecision": "CONSTRAIN",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -8184,7 +8166,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "claude.ai"
@@ -8202,7 +8184,7 @@
       "tool_input.host"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "deepseek.com"
@@ -8338,7 +8320,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "predicateFieldsAbsent": [
       "tool_input.filenames"
@@ -8356,7 +8338,7 @@
      "effectiveDecision": "REVIEW",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -8446,7 +8428,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -8574,8 +8556,8 @@
      "status": "enforced",
      "effectiveDecision": "BLOCK",
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "chatgpt.com",
@@ -8594,8 +8576,8 @@
      "status": "enforced",
      "effectiveDecision": "REVIEW",
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -8604,8 +8586,8 @@
      "status": "enforced",
      "effectiveDecision": "CONSTRAIN",
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -8615,7 +8597,7 @@
      "effectiveDecision": "ALLOW",
      "predicateFieldsAbsent": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -8625,7 +8607,8 @@
      "host": "github.com"
     }
    ]
-  }
+  },
+  "note": "v2: a protection over 'any external AI' pins on the destination CLASS (APPROVED_AI|KNOWN_AI_UNAPPROVED|UNKNOWN_EXTERNAL), not the catalogue host list \u2014 an uncatalogued host no longer escapes (audit G2)"
  },
  {
   "id": "prec-018-constrain-with-unrunnable-handler-fails-closed-not-to-allow",
@@ -10228,7 +10211,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "predicateFieldsAbsent": [
       "tool_input.filenames"
@@ -10456,7 +10439,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 4
     }
@@ -10648,7 +10631,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 3
     }
@@ -10825,7 +10808,7 @@
       "tool_input.filenames"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 3
     }
@@ -11048,7 +11031,7 @@
      "effectiveDecision": "CONSTRAIN",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 1
     },
@@ -11060,7 +11043,7 @@
      "effectiveDecision": "CONSTRAIN",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 2
     }
@@ -11129,8 +11112,8 @@
       "perplexity.ai"
      ],
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 1
     },
@@ -11153,7 +11136,8 @@
      "status": "understood_only"
     }
    ]
-  }
+  },
+  "note": "v2: a protection over 'any external AI' pins on the destination CLASS (APPROVED_AI|KNOWN_AI_UNAPPROVED|UNKNOWN_EXTERNAL), not the catalogue host list \u2014 an uncatalogued host no longer escapes (audit G2)"
  },
  {
   "id": "dedupe-survivor-keeps-highest-priority",
@@ -11217,7 +11201,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 2
     },
@@ -11289,7 +11273,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 2
     }
@@ -11670,7 +11654,7 @@
      "action": "disclose",
      "status": "enforced",
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 1
     },
@@ -11679,7 +11663,7 @@
      "action": "disclose",
      "status": "enforced",
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 1
     },
@@ -11688,7 +11672,7 @@
      "action": "disclose",
      "status": "enforced",
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 1
     },
@@ -11697,7 +11681,7 @@
      "action": "disclose",
      "status": "enforced",
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 1
     }
@@ -12105,7 +12089,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 2
     },
@@ -12120,7 +12104,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 1
     }
@@ -12194,7 +12178,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 2
     }
@@ -12265,7 +12249,7 @@
       "tool_input.filenames"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -12569,8 +12553,8 @@
       "perplexity.ai"
      ],
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -12587,7 +12571,8 @@
      "kind": "catchAllPresent"
     }
    ]
-  }
+  },
+  "note": "v2: a protection over 'any external AI' pins on the destination CLASS (APPROVED_AI|KNOWN_AI_UNAPPROVED|UNKNOWN_EXTERNAL), not the catalogue host list \u2014 an uncatalogued host no longer escapes (audit G2)"
  },
  {
   "id": "pb-07-ide-agent-modifies-src-tree",
@@ -12760,7 +12745,7 @@
      ],
      "predicateFieldsAbsent": [
       "tool_input.filenames",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -13186,37 +13171,29 @@
   "expect": {
    "clauseCount": 1,
    "rejectedCount": 0,
-   "compiledCount": 0,
+   "compiledCount": 1,
    "clauses": [
     {
      "decision": "BLOCK",
      "action": "disclose",
      "plane": "network",
-     "status": "understood_only",
+     "status": "enforced",
      "effectiveDecision": "BLOCK",
-     "unenforcedFacets": [
-      "data.classes"
-     ],
+     "unenforcedFacets": [],
      "destHostsInclude": [
       "perplexity.ai"
      ],
-     "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
-     ]
+     "predicateFieldsAbsent": []
     }
    ],
    "mustNot": [
-    {
-     "kind": "statusIs",
-     "clauseIndex": 0,
-     "status": "enforced"
-    },
     {
      "kind": "anyClauseWithDecision",
      "decision": "ALLOW"
     }
    ]
-  }
+  },
+  "note": "v2: FINANCIAL has an available detector (wrapbox.financial, medium confidence)"
  },
  {
   "id": "pb-17-edit-modify-overwrite-dedupe-on-endpoint",
@@ -13431,12 +13408,11 @@
      "action": "disclose",
      "resourceType": "file",
      "plane": "network",
-     "status": "degraded",
+     "status": "enforced",
      "effectiveDecision": "BLOCK",
-     "unenforcedFacets": [
-      "destination"
-     ],
+     "unenforcedFacets": [],
      "predicateFields": [
+      "tool_input.destination_class",
       "tool_input.filenames"
      ],
      "predicateFieldsAbsent": [
@@ -13446,16 +13422,12 @@
    ],
    "mustNot": [
     {
-     "kind": "statusIs",
-     "clauseIndex": 0,
-     "status": "enforced"
-    },
-    {
      "kind": "anyClauseWithDecision",
      "decision": "ALLOW"
     }
    ]
-  }
+  },
+  "note": "v2: ANY_EXTERNAL class makes the destination enforceable"
  },
  {
   "id": "hc-01-financial-block-understood-only",
@@ -13481,7 +13453,7 @@
   "expect": {
    "clauseCount": 1,
    "rejectedCount": 0,
-   "activationBlocked": false,
+   "activationBlocked": true,
    "compiledCount": 0,
    "clauses": [
     {
@@ -13495,7 +13467,7 @@
       "data.classes"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -13510,7 +13482,8 @@
     }
    ]
   },
-  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass.",
+  "note": "v2 invariant I1: a network protection whose data type has no detector holds activation until the admin chooses block-carrier / review / accept-risk (audit G3)"
  },
  {
   "id": "hc-02-health-record-phi-block-understood-only",
@@ -13537,29 +13510,19 @@
   "expect": {
    "clauseCount": 1,
    "rejectedCount": 0,
-   "compiledCount": 0,
+   "compiledCount": 1,
    "clauses": [
     {
      "decision": "BLOCK",
      "action": "disclose",
-     "status": "understood_only",
+     "status": "enforced",
      "plane": "network",
      "effectiveDecision": "BLOCK",
-     "unenforcedFacets": [
-      "data.classes"
-     ],
-     "predicateFieldsAbsent": [
-      "tool_input.content_kinds",
-      "tool_input.host"
-     ]
+     "unenforcedFacets": [],
+     "predicateFieldsAbsent": []
     }
    ],
    "mustNot": [
-    {
-     "kind": "statusIs",
-     "clauseIndex": 0,
-     "status": "enforced"
-    },
     {
      "kind": "statusIs",
      "clauseIndex": 0,
@@ -13567,7 +13530,8 @@
     }
    ]
   },
-  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass.",
+  "note": "v2: PCI.PAN is detected (Luhn); the clause is enforced"
  },
  {
   "id": "hc-03-legal-review-with-approvers-understood-only",
@@ -13597,7 +13561,7 @@
   "expect": {
    "clauseCount": 1,
    "rejectedCount": 0,
-   "activationBlocked": false,
+   "activationBlocked": true,
    "compiledCount": 0,
    "clauses": [
     {
@@ -13623,7 +13587,8 @@
     }
    ]
   },
-  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass.",
+  "note": "v2 invariant I1 (see hc-01)"
  },
  {
   "id": "hc-04-health-record-review-no-approver-blocks-activation",
@@ -13708,7 +13673,7 @@
       "data.classes"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -13767,7 +13732,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "gemini.google.com"
@@ -13937,7 +13902,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "copilot.microsoft.com"
@@ -14001,7 +13966,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "chatgpt.com",
@@ -14067,7 +14032,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "mistral.ai"
@@ -14127,7 +14092,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "perplexity.ai"
@@ -14184,7 +14149,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "predicateFieldsAbsent": [
       "tool_input.filenames"
@@ -14258,7 +14223,7 @@
      "sourcesCount": 2,
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "chatgpt.com"
@@ -14349,7 +14314,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "claude.ai"
@@ -14361,7 +14326,7 @@
      "effectiveDecision": "CONSTRAIN",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -14461,7 +14426,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destNotHostsInclude": [
       "chatgpt.com",
@@ -14548,7 +14513,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "deepseek.com"
@@ -14564,7 +14529,7 @@
      "effectiveDecision": "ALLOW",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "githubcopilot.com"
@@ -14644,7 +14609,7 @@
       "tool_input.filenames"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "drive.google.com"
@@ -14695,11 +14660,11 @@
      "plane": "network",
      "effectiveDecision": "BLOCK",
      "unenforcedFacets": [
-      "data.classes",
-      "destination"
+      "data.classes"
      ],
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ],
      "predicateFieldsAbsent": [
       "tool_input.host"
@@ -14721,7 +14686,8 @@
     }
    ]
   },
-  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass."
+  "_correction": "content.financial/phi/legal/confidential detectors are now REGISTERED (real multi-signal classifiers landed in the runtime), so those families are ENFORCED. This case guards the understood_only/degraded HONESTY path, so it is repointed to a family that genuinely still has no detector (ip/m_and_a/pci/export_controlled); the expectation is unchanged because an undetected class behaves exactly as financial did before this pass.",
+  "note": "v2: ANY_EXTERNAL class; FINANCIAL is detected by the multi-signal detector"
  },
  {
   "id": "hc-20-ordinary-plus-email-review-with-approvers-degraded",
@@ -14765,7 +14731,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "x.ai",
@@ -14900,8 +14866,8 @@
       "gemini.google.com"
      ],
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ],
      "unenforcedFacets": [
       "subject"
@@ -14918,7 +14884,8 @@
      "decision": "CONSTRAIN"
     }
    ]
-  }
+  },
+  "note": "v2: a protection over 'any external AI' pins on the destination CLASS (APPROVED_AI|KNOWN_AI_UNAPPROVED|UNKNOWN_EXTERNAL), not the catalogue host list \u2014 an uncatalogued host no longer escapes (audit G2)"
  },
  {
   "id": "subj-03-contractors-review-with-approvers",
@@ -15073,7 +15040,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "unenforcedFacets": [
       "subject"
@@ -15141,7 +15108,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "unenforcedFacets": [
       "subject"
@@ -15205,7 +15172,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "unenforcedFacets": [
       "subject"
@@ -15365,8 +15332,8 @@
       "perplexity.ai"
      ],
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ],
      "unenforcedFacets": [
       "subject"
@@ -15404,7 +15371,8 @@
      "kind": "catchAllPresent"
     }
    ]
-  }
+  },
+  "note": "v2: a protection over 'any external AI' pins on the destination CLASS (APPROVED_AI|KNOWN_AI_UNAPPROVED|UNKNOWN_EXTERNAL), not the catalogue host list \u2014 an uncatalogued host no longer escapes (audit G2)"
  },
  {
   "id": "subj-10-dedupe-same-subject-clause-two-sentences",
@@ -15651,19 +15619,18 @@
    "clauseCount": 1,
    "rejectedCount": 0,
    "activationBlocked": false,
-   "compiledCount": 0,
+   "compiledCount": 1,
    "clauses": [
     {
      "decision": "CONSTRAIN",
      "action": "disclose",
-     "status": "understood_only",
+     "status": "degraded",
      "plane": "network",
-     "effectiveDecision": "CONSTRAIN",
-     "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
-     ],
+     "effectiveDecision": "BLOCK",
+     "predicateFieldsAbsent": [],
      "unenforcedFacets": [
-      "data.classes"
+      "transform",
+      "subject"
      ]
     }
    ],
@@ -15676,14 +15643,10 @@
      "kind": "statusIs",
      "clauseIndex": 0,
      "status": "enforced"
-    },
-    {
-     "kind": "statusIs",
-     "clauseIndex": 0,
-     "status": "degraded"
     }
    ]
-  }
+  },
+  "note": "v2: FINANCIAL is detectable but the registry declares REVERSIBLE_TOKENIZE unsafe for it \u2192 compiled as BLOCK (degraded, never allow)"
  },
  {
   "id": "subj-14-data-eng-edit-local-files-is-endpoint",
@@ -15969,7 +15932,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "unenforcedFacets": [
       "subject"
@@ -16042,7 +16005,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "unenforcedFacets": [
       "subject"
@@ -17382,7 +17345,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 1
     }
@@ -17448,7 +17411,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -17499,7 +17462,7 @@
       "slack.com"
      ],
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -17754,7 +17717,7 @@
      "effectiveDecision": "REVIEW",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -17767,7 +17730,7 @@
       "tool_input.filenames"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -17927,7 +17890,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "sourcesCount": 2
     }
@@ -18100,7 +18063,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -18123,7 +18086,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -18280,7 +18243,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -18344,7 +18307,7 @@
   ],
   "expect": {
    "clauseCount": 1,
-   "activationBlocked": false,
+   "activationBlocked": true,
    "compiledCount": 0,
    "clauses": [
     {
@@ -18382,7 +18345,8 @@
      "decision": "BLOCK"
     }
    ]
-  }
+  },
+  "note": "v2 invariant I1: an unresolved destination set on a protection holds activation"
  },
  {
   "id": "review-config-014-review-unobservable-class-understood-only",
@@ -18409,17 +18373,15 @@
   "expect": {
    "clauseCount": 1,
    "activationBlocked": false,
-   "compiledCount": 0,
+   "compiledCount": 1,
    "clauses": [
     {
      "decision": "REVIEW",
      "action": "disclose",
-     "status": "understood_only",
+     "status": "enforced",
      "plane": "network",
      "effectiveDecision": "REVIEW",
-     "unenforcedFacets": [
-      "data.classes"
-     ],
+     "unenforcedFacets": [],
      "destHostsInclude": [
       "chatgpt.com",
       "claude.ai"
@@ -18427,11 +18389,6 @@
     }
    ],
    "mustNot": [
-    {
-     "kind": "statusIs",
-     "clauseIndex": 0,
-     "status": "enforced"
-    },
     {
      "kind": "statusIs",
      "clauseIndex": 0,
@@ -18446,7 +18403,8 @@
      "decision": "BLOCK"
     }
    ]
-  }
+  },
+  "note": "v2: FINANCIAL detectable; ANY_AI class"
  },
  {
   "id": "review-config-015-review-mixed-classes-degraded-keeps-review",
@@ -18481,15 +18439,13 @@
     {
      "decision": "REVIEW",
      "action": "disclose",
-     "status": "degraded",
+     "status": "enforced",
      "plane": "network",
      "effectiveDecision": "REVIEW",
-     "unenforcedFacets": [
-      "data.classes"
-     ],
+     "unenforcedFacets": [],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "copilot.microsoft.com"
@@ -18497,11 +18453,6 @@
     }
    ],
    "mustNot": [
-    {
-     "kind": "statusIs",
-     "clauseIndex": 0,
-     "status": "enforced"
-    },
     {
      "kind": "anyClauseWithDecision",
      "decision": "ALLOW"
@@ -18511,7 +18462,8 @@
      "decision": "BLOCK"
     }
    ]
-  }
+  },
+  "note": "v2: PII and FINANCIAL both detectable"
  },
  {
   "id": "review-config-016-review-with-group-subject-broadens-not-degrades",
@@ -18561,7 +18513,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -19165,7 +19117,7 @@
       "tool_input.filenames"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "unenforcedFacets": [
       "subject"
@@ -19240,8 +19192,8 @@
       "deepseek.com"
      ],
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -19258,7 +19210,8 @@
      "kind": "catchAllPresent"
     }
    ]
-  }
+  },
+  "note": "v2: a protection over 'any external AI' pins on the destination CLASS (APPROVED_AI|KNOWN_AI_UNAPPROVED|UNKNOWN_EXTERNAL), not the catalogue host list \u2014 an uncatalogued host no longer escapes (audit G2)"
  },
  {
   "id": "inv-12-passive-blocked-named-service-not-widened",
@@ -19306,7 +19259,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -19508,7 +19461,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -19575,7 +19528,7 @@
       "tool_input.host"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -19652,7 +19605,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "unenforcedFacets": [
       "subject"
@@ -20885,7 +20838,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
@@ -21159,24 +21112,23 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     },
     {
      "decision": "BLOCK",
      "action": "disclose",
-     "status": "degraded",
+     "status": "enforced",
      "plane": "network",
      "effectiveDecision": "BLOCK",
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ],
      "predicateFieldsAbsent": [
       "tool_input.host"
      ],
-     "unenforcedFacets": [
-      "destination"
-     ]
+     "unenforcedFacets": []
     }
    ],
    "compiledCount": 2,
@@ -21190,7 +21142,8 @@
      "host": "outlook.com"
     }
    ]
-  }
+  },
+  "note": "v2: ANY_EXTERNAL class"
  },
  {
   "id": "domains-messaging-employees-subject-degrades-allow-named-list-not-category",
@@ -21308,7 +21261,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -21377,16 +21330,14 @@
     {
      "decision": "BLOCK",
      "action": "disclose",
-     "status": "understood_only",
+     "status": "enforced",
      "plane": "network",
-     "unenforcedFacets": [
-      "data.classes"
-     ]
+     "unenforcedFacets": []
     },
     {
      "decision": "REVIEW",
      "action": "disclose",
-     "status": "degraded",
+     "status": "enforced",
      "plane": "network",
      "effectiveDecision": "REVIEW",
      "destHostsInclude": [
@@ -21395,32 +21346,21 @@
       "gemini.google.com"
      ],
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ],
-     "unenforcedFacets": [
-      "data.classes"
-     ]
+     "unenforcedFacets": []
     }
    ],
-   "compiledCount": 1,
+   "compiledCount": 2,
    "mustNot": [
-    {
-     "kind": "statusIs",
-     "clauseIndex": 0,
-     "status": "enforced"
-    },
-    {
-     "kind": "statusIs",
-     "clauseIndex": 1,
-     "status": "enforced"
-    },
     {
      "kind": "anyClauseWithDecision",
      "decision": "ALLOW"
     }
    ]
-  }
+  },
+  "note": "v2: FINANCIAL.STATEMENT detectable"
  },
  {
   "id": "adv-01-prototype-keys-in-vocabulary",
@@ -21501,7 +21441,7 @@
       "data.classes"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -21685,7 +21625,7 @@
      "status": "enforced",
      "plane": "network",
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "predicateFieldsAbsent": [
       "tool_input.host"
@@ -21742,7 +21682,7 @@
      "effectiveDecision": "ALLOW",
      "predicateFieldsAbsent": [
       "tool_input.host",
-      "tool_input.content_kinds",
+      "tool_input.findings_v2",
       "tool_input.filenames"
      ]
     }
@@ -21803,7 +21743,7 @@
      "plane": "network",
      "effectiveDecision": "BLOCK",
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "predicateFieldsAbsent": [
       "tool_input.host"
@@ -21824,7 +21764,7 @@
      ],
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -21887,8 +21827,8 @@
      "status": "enforced",
      "plane": "network",
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "chatgpt.com",
@@ -21939,7 +21879,8 @@
      "decision": "CONSTRAIN"
     }
    ]
-  }
+  },
+  "note": "v2: a protection over 'any external AI' pins on the destination CLASS (APPROVED_AI|KNOWN_AI_UNAPPROVED|UNKNOWN_EXTERNAL), not the catalogue host list \u2014 an uncatalogued host no longer escapes (audit G2)"
  },
  {
   "id": "adv-08-constrain-without-handler-and-unknown-handler",
@@ -22002,7 +21943,7 @@
    "clauseCount": 1,
    "rejectedCount": 2,
    "compiledCount": 0,
-   "activationBlocked": false,
+   "activationBlocked": true,
    "clauses": [
     {
      "decision": "CONSTRAIN",
@@ -22026,7 +21967,8 @@
      "kind": "catchAllPresent"
     }
    ]
-  }
+  },
+  "note": "v2 invariant I1: a CONSTRAIN with no executable handler to a named destination holds activation"
  },
  {
   "id": "adv-09-named-destination-absent-from-registry",
@@ -22256,14 +22198,13 @@
     {
      "decision": "BLOCK",
      "action": "disclose",
-     "status": "degraded",
+     "status": "enforced",
      "plane": "network",
      "effectiveDecision": "BLOCK",
-     "unenforcedFacets": [
-      "destination"
-     ],
+     "unenforcedFacets": [],
      "predicateFields": [
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ],
      "predicateFieldsAbsent": [
       "tool_input.host"
@@ -22291,7 +22232,8 @@
      "kind": "catchAllPresent"
     }
    ]
-  }
+  },
+  "note": "v2: 'externally' \u2192 ANY_EXTERNAL class (a runtime-resolved class, still never a catalogue widening)"
  },
  {
   "id": "adv-13-negation-never-inverts-to-allow",
@@ -22831,7 +22773,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "chatgpt.com"
@@ -22848,7 +22790,7 @@
       "tool_input.filenames"
      ],
      "predicateFieldsAbsent": [
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -22897,7 +22839,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "chatgpt.com"
@@ -22953,7 +22895,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "claude.ai",
@@ -23006,8 +22948,8 @@
      "plane": "network",
      "effectiveDecision": "REVIEW",
      "predicateFields": [
-      "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.destination_class",
+      "tool_input.findings_v2"
      ]
     }
    ],
@@ -23019,7 +22961,8 @@
     }
    ]
   },
-  "_note": "Positive proof of the capability pass: a real multi-signal content.<family> detector is now registered, so this family ENFORCES (detection-based BLOCK/REVIEW) with a host+content_kinds predicate \u2014 previously understood_only. Adding the detector was the only change; no compiler/parser/schema edit (\u00a727)."
+  "_note": "Positive proof of the capability pass: a real multi-signal content.<family> detector is now registered, so this family ENFORCES (detection-based BLOCK/REVIEW) with a host+content_kinds predicate \u2014 previously understood_only. Adding the detector was the only change; no compiler/parser/schema edit (\u00a727).",
+  "note": "v2: a protection over 'any external AI' pins on the destination CLASS (APPROVED_AI|KNOWN_AI_UNAPPROVED|UNKNOWN_EXTERNAL), not the catalogue host list \u2014 an uncatalogued host no longer escapes (audit G2)"
  },
  {
   "id": "hc-24-confidential-block-now-enforced",
@@ -23055,7 +22998,7 @@
      "effectiveDecision": "BLOCK",
      "predicateFields": [
       "tool_input.host",
-      "tool_input.content_kinds"
+      "tool_input.findings_v2"
      ],
      "destHostsInclude": [
       "chatgpt.com"

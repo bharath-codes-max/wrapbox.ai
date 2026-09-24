@@ -30,6 +30,8 @@ import {
 } from "./schema";
 import { resolveBinding } from "./resolve";
 import { bridgeClass } from "./runtime";
+import { dataTypes, expandClass } from "@wrapbox/registry";
+import { ownedByFuturePlane } from "./resolve";
 import type { RuntimeInvariant } from "./schema";
 import { setContractGroups, getContractGroups, allGroups, groupIdFor, findService, type DestinationGroup } from "./destinations";
 
@@ -79,10 +81,19 @@ export interface SurfaceClause {
     host?: string[];
     trust?: string;              // "external" | "internal"
     /** The COMPLEMENT: "any other external destination", "anywhere except these". */
-    notIn?: { group?: string; service?: string[]; host?: string[] };
+    notIn?: { group?: string; service?: string[]; host?: string[]; classes?: string[] };
+    /** Destination Registry class names ("ANY_EXTERNAL", "APPROVED_AI"…) when the admin meant a whole class. */
+    classes?: string[];
   };
-  data?: { classes?: string[]; fields?: string[] };
+  data?: {
+    classes?: string[]; fields?: string[];
+    /** Count / confidence / bulk semantics the sentence stated ("more than 100 records", "any single…"). */
+    minCount?: number | null; minConfidence?: "low" | "medium" | "high" | null; scope?: "any" | "bulk" | null;
+    owner?: string | null;
+  };
   scope?: { environment?: string[]; instances?: string[] };
+  /** What should happen when a required capability is missing (protections only). */
+  onUnsupported?: "hold_activation" | "block" | "review" | "accept_risk" | null;
   /** A raw threshold the model detected, e.g. {field:"amount", op:">", value:500, unit:"USD"} */
   threshold?: { field?: string; op?: string; value?: number; unit?: string };
   decision?: string;             // "allow" | "constrain" | "review" | "block"
@@ -536,6 +547,9 @@ export function validateSurface(surface: SurfaceClause[], _opts: { basePriority?
     if (!globs.length) return s;
     const lifted: string[] = []; const kept: string[] = [];
     for (const g of globs) {
+      // Only a "*.<word>" glob can be a mis-filed CLASS ("*.source", "*.secret").
+      // A real filename (".env", "src/**") is a path and stays one.
+      if (!/^(?:\*+\.)?[a-z_ -]+$/i.test(g.trim())) { kept.push(g); continue; }
       const stem = (g.split("/").pop() ?? g).replace(/^\*+\.?/, "").replace(/\.\*+$/, "").toLowerCase();
       const kind = stem ? bridgeClass(stem) : null;
       if (kind) lifted.push(kind === "source_code" ? "SOURCE_CODE" : kind === "secret" ? "SECRET" : kind === "pii" ? "PII" : "CREDENTIAL_FILE");
@@ -707,14 +721,20 @@ export function validateSurface(surface: SurfaceClause[], _opts: { basePriority?
       }
     }
 
+    // DATA — resolve every phrase through the Data Type Registry. A phrase that
+    // resolves to nothing becomes a CUSTOM candidate (pending, visibly), never
+    // an adjacent family. Count/confidence semantics live on the clause.
+    const dataFacet = buildData(s, decision, issues);
+
     const clause: IntentClause = {
       id: clauseId(),
       priority: 0, // assigned below from severity + specificity
       subject,
       action: { verbs: [verb] },
       resource: buildResource(s, resType),
-      ...(s.destination ? { destination: buildDestination(s) } : {}),
-      ...(s.data && (s.data.classes?.length || s.data.fields?.length) ? { data: { ...(s.data.classes ? { classes: s.data.classes } : {}), ...(s.data.fields ? { fields: s.data.fields } : {}) } } : {}),
+      ...(s.destination ? { destination: buildDestination(s, decision) } : {}),
+      ...(dataFacet ? { data: dataFacet } : {}),
+      ...(decision !== "ALLOW" ? { onUnsupported: s.onUnsupported ?? "hold_activation" } : {}),
       ...(s.scope && (s.scope.environment?.length || s.scope.instances?.length) ? { scope: { ...(s.scope.environment ? { environment: s.scope.environment as never } : {}), ...(s.scope.instances ? { instances: s.scope.instances } : {}) } } : {}),
       ...(Object.keys(conds).length ? { conditions: conds } : {}),
       decision,
@@ -740,11 +760,106 @@ export function validateSurface(surface: SurfaceClause[], _opts: { basePriority?
     }
     // Bind it now so the caller sees honest status immediately.
     clause.binding = resolveBinding(clause);
+    // INVARIANT I1 — no silent allow. A protection the deployed runtime cannot
+    // enforce holds the whole contract unless the admin resolves it (block the
+    // carrier, require review, or accept the risk with a signed reason).
+    markUnenforceable(clause);
     addClause(clause);
   });
 
   const activationBlocked = clauses.some((c) => c.issues?.some((i) => i.severity === "block_activation"));
   return { clauses, rejected, warnings, activationBlocked, invariants: [...invariants], groups };
+}
+
+/**
+ * The data facet: phrases → registry ids, plus count/confidence semantics.
+ *
+ *   "customer email addresses and phone numbers" → [PII.CONTACT.EMAIL, PII.CONTACT.PHONE]
+ *   "trade secrets"                                → [COMPANY_IP.TRADE_SECRET]  (declared → understood_only)
+ *   "frobnicator ids"                              → [CUSTOM.?.FROBNICATOR_IDS] (pending, admin must register)
+ *
+ * minCount / minConfidence come from the sentence when stated, else from the
+ * most specific registry default among the named types ("bulk" phrasing uses
+ * the family's bulkCount). This is where the old "5+ emails" detector
+ * threshold now lives — as POLICY, per clause, for every type alike.
+ */
+function buildData(s: SurfaceClause, decision: Decision, issues: ClauseIssue[]): IntentClause["data"] | undefined {
+  const d = s.data;
+  if (!d || (!d.classes?.length && !d.fields?.length)) return undefined;
+  const reg = dataTypes();
+  const classes: string[] = [];
+  const unresolved: string[] = [];
+  for (const raw of d.classes ?? []) {
+    const phrase = String(raw).trim();
+    if (!phrase) continue;
+    const hits = reg.resolveAll(phrase);
+    if (hits.length) { for (const h of hits) if (!classes.includes(h.id)) classes.push(h.id); continue; }
+    const cand = `CUSTOM.?.${phrase.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "UNKNOWN"}`;
+    classes.push(cand); unresolved.push(phrase);
+  }
+  if (unresolved.length) {
+    issues.push({ severity: decision === "ALLOW" ? "warning" : "info", code: "unknown_data_class",
+      message: `“${unresolved.join("”, “")}” is not a registered data type — register it as a tenant type (identifier list, pattern, dictionary or label) to make it enforceable; kept as pending` });
+  }
+  // Defaults: the most specific named type wins; "bulk" phrasing uses bulkCount.
+  let minCount = 1, minConfidence: "low" | "medium" | "high" = "medium", origin: "clause" | "registry" | "inherited" = "registry";
+  const known = classes.filter((c) => !c.startsWith("CUSTOM.?."));
+  if (known.length) {
+    const defs = known.map((c) => reg.defaults(c));
+    minCount = Math.max(...defs.map((x) => x.minCount));
+    minConfidence = defs.map((x) => x.minConfidence).sort((a, b) => ({ low: 0, medium: 1, high: 2 }[a] - { low: 0, medium: 1, high: 2 }[b]))[0];
+    origin = known.some((c) => reg.has(c)) ? "registry" : "inherited";
+  }
+  const scope: "any" | "bulk" = d.scope === "bulk" ? "bulk" : "any";
+  if (scope === "bulk" && known.length) minCount = Math.max(minCount, ...known.map((c) => reg.defaults(c).bulkCount ?? 5));
+  if (typeof d.minCount === "number" && d.minCount >= 1) { minCount = Math.round(d.minCount); origin = "clause"; }
+  if (d.minConfidence) { minConfidence = d.minConfidence; origin = "clause"; }
+  // A CONSTRAIN on a type the registry says is never transformable is refused at
+  // the policy level, not silently downgraded: the runtime would block, and the
+  // admin should know before activation.
+  if (decision === "CONSTRAIN") {
+    const bad = known.filter((c) => !reg.allowedActions(c).includes("CONSTRAIN"));
+    if (bad.length) issues.push({ severity: "warning", code: "constrain_not_allowed", message: `${bad.join(", ")} can never be transformed and forwarded (only blocked or reviewed) — this clause will BLOCK, not tokenize` });
+  }
+  return {
+    ...(classes.length ? { classes } : {}),
+    ...(d.fields?.length ? { fields: d.fields } : {}),
+    ...(unresolved.length ? { unresolved } : {}),
+    ...(d.owner ? { owner: d.owner } : {}),
+    match: { minCount, minConfidence, scope, origin },
+  };
+}
+
+/** I1: a protection the runtime cannot enforce today must be resolved before activation. */
+function markUnenforceable(clause: IntentClause): void {
+  if (clause.decision === "ALLOW") return;
+  const st = clause.binding.status;
+  if (st === "enforced" || st === "degraded") return;
+  // I1 is about the DEPLOYED plane: a network-owned protection (content leaves
+  // the machine) that the network runtime cannot enforce would otherwise ride
+  // the catch-all ALLOW. A clause owned by an undeployed plane (an in-place
+  // file edit, a git push, an IAM grant, a payment rail) is not observable on
+  // the network at all; it stays understood_only and is reported, but does
+  // not hold the whole contract hostage to a plane that has not shipped.
+  if (ownedByFuturePlane(clause) !== null) return;
+  // …and only where the network plane is the one that WOULD see it: a clause
+  // that names protected content or a destination. A threshold on a payment
+  // amount, a deploy, an IAM grant name no data and no host — the network has
+  // nothing to pin on; that gap is reported as understood_only, not held.
+  const networkPin = Boolean(clause.data?.classes?.length) || Boolean(clause.destination && Object.keys(clause.destination).length);
+  if (!networkPin) return;
+  const how = clause.onUnsupported ?? "hold_activation";
+  const why = clause.binding.rationale;
+  const existing = (clause.issues ?? []).filter((i) => i.code !== "protection_unenforceable" && i.code !== "accept_risk_unsigned");
+  if (how === "hold_activation") {
+    existing.push({ severity: "block_activation", code: "protection_unenforceable", message: `Cannot be enforced as written (${why}). Choose: block the carrier (uploads and uninspectable bodies to this destination), require review, or accept the risk with a reason.` });
+  } else if (how === "accept_risk") {
+    if (!clause.acceptRisk?.by || !clause.acceptRisk?.reason) existing.push({ severity: "block_activation", code: "accept_risk_unsigned", message: "Accepting the risk needs your identity and a reason — both are recorded in evidence." });
+    else existing.push({ severity: "warning", code: "risk_accepted", message: `risk accepted by ${clause.acceptRisk.by}: ${clause.acceptRisk.reason}` });
+  } else {
+    existing.push({ severity: "warning", code: "carrier_rule", message: `unenforceable as written; compiled as ${how.toUpperCase()} on uploads and uninspectable bodies to its destination scope` });
+  }
+  clause.issues = existing;
 }
 
 function buildResource(s: SurfaceClause, resType: ResourceType | null): IntentClause["resource"] {
@@ -806,11 +921,16 @@ const ALL_OF_KIND = /\b(any|all|every|each|other|another|unapproved|unsanctioned
  * anywhere) is kept as namedSet — a label the resolver reports as needing
  * members, never expanded on a guess.
  */
-function buildDestination(s: SurfaceClause): NonNullable<IntentClause["destination"]> {
+function buildDestination(s: SurfaceClause, decision?: Decision): NonNullable<IntentClause["destination"]> {
   const d: NonNullable<IntentClause["destination"]> = {};
   const src = s.destination ?? {};
   const text = norm(s.text);
   const cat = norm(src.category);
+  const isProtection = decision !== undefined && decision !== "ALLOW";
+  // Explicit Destination Registry classes from the extractor.
+  const classNames = (src.classes ?? []).map((c) => String(c).toUpperCase().replace(/[\s-]+/g, "_")).filter((c) => expandClass(c).length);
+  if (classNames.length) d.classes = classNames;
+  const notClasses = (src.notIn?.classes ?? []).map((c) => String(c).toUpperCase().replace(/[\s-]+/g, "_")).filter((c) => expandClass(c).length);
 
   // 1. Named services — resolve each name against the registry, keep the rest
   //    verbatim so the resolver can report them as unknown rather than drop them.
@@ -847,8 +967,15 @@ function buildDestination(s: SurfaceClause): NonNullable<IntentClause["destinati
       ...(src.notIn.group ? { group: groupIdFor(src.notIn.group) } : {}),
       ...(src.notIn.service?.length ? { service: src.notIn.service.map((n) => findService(n)?.id ?? n.trim()) } : {}),
       ...(src.notIn.host?.length ? { host: src.notIn.host } : {}),
+      ...(notClasses.length ? { classes: notClasses } : {}),
     };
   }
+
+  // A positive scope that equals its own complement can never match — the
+  // complement is the meaning; drop the positive side rather than compile a
+  // rule that silently never fires.
+  if (d.group && d.notIn?.group === d.group) delete d.group;
+  if (d.service?.length && d.notIn?.service?.length && d.service.every((x) => d.notIn!.service!.includes(x))) delete d.service;
 
   // 4. Literal hosts.
   if (src.host?.length) d.host = src.host;
@@ -868,6 +995,17 @@ function buildDestination(s: SurfaceClause): NonNullable<IntentClause["destinati
 
   if (norm(src.trust) === "external" || d.category?.includes("external_ai") || d.notIn) d.trust = "external";
   if (norm(src.trust) === "internal") d.trust = "internal";
+
+  // 6. CLASSES for protections. "Any external AI service" must cover the AI
+  //    service that launches tomorrow, and "any other external destination" every
+  //    host nobody catalogued — so a PROTECTION scoped by category/trust/complement
+  //    carries a destination CLASS the runtime resolves per request. A PERMISSION
+  //    keeps the catalogue hosts (never wider than written).
+  if (isProtection && !d.classes?.length) {
+    if (d.category?.includes("external_ai")) d.classes = ["ANY_AI"];
+    else if (d.trust === "external" && !d.service?.length && !d.group && !d.host?.length && !d.namedSet && !d.notIn) d.classes = ["ANY_EXTERNAL"];
+  }
+  if (!isProtection && d.trust === "internal" && !d.classes?.length && !d.service?.length && !d.group && !d.host?.length) d.classes = ["INTERNAL"];
   return d;
 }
 

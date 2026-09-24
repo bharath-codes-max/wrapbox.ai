@@ -260,19 +260,27 @@ const FAMILY_DETECTOR: Record<string, string> = { financial: "wrapbox.financial"
 
 function confBand(c: number): Confidence { return c >= 0.85 ? "high" : c >= 0.5 ? "medium" : "low"; }
 
-export const multiSignal: DetectorImpl = {
-  descriptor: desc("wrapbox.financial"),   // representative; findings carry the family's own detector id
-  available: () => ({ ok: true }),
-  detect(input: DetectInput): Finding[] {
-    const text = (input.text ?? "").slice(0, MAX_TEXT);
-    if (!text) return [];
-    const res = classifyExtended(text, { filenames: input.filename ? [input.filename] : [], contentType: input.contentType ?? "" });
-    return res.map((f) => ({
-      type: FAMILY_TYPE[f.family] ?? f.family.toUpperCase(), count: Math.max(1, f.count), confidence: confBand(f.confidence),
-      detector: FAMILY_DETECTOR[f.family] ?? `wrapbox.${f.family}`, version: "1.1.0", label: f.label,
-      ...(input.unitPath ? { unitPath: input.unitPath } : {}),
-    }));
-  },
-};
+function multiSignalFor(family: "financial" | "phi" | "legal" | "confidential"): DetectorImpl {
+  const impl: DetectorImpl = {
+    descriptor: desc(FAMILY_DETECTOR[family]),
+    available: () => ({ ok: true }),
+    detect(input: DetectInput): Finding[] {
+      const text = (input.text ?? "").slice(0, MAX_TEXT);
+      if (!text) return [];
+      const res = classifyExtended(text, { filenames: input.filename ? [input.filename] : [], contentType: input.contentType ?? "" }).filter((f) => f.family === family);
+      return res.map((f) => ({
+        type: FAMILY_TYPE[f.family], count: Math.max(1, f.count), confidence: confBand(f.confidence),
+        detector: impl.descriptor.id, version: impl.descriptor.version, label: f.label,
+        ...(input.unitPath ? { unitPath: input.unitPath } : {}),
+      }));
+    },
+  };
+  return impl;
+}
 
-export const BUILTIN_IMPLS: DetectorImpl[] = [patternPii, secretsBuiltin, credentialFile, codeHeuristic, multiSignal];
+export const multiSignalFinancial = multiSignalFor("financial");
+export const multiSignalPhi = multiSignalFor("phi");
+export const multiSignalLegal = multiSignalFor("legal");
+export const multiSignalConfidential = multiSignalFor("confidential");
+
+export const BUILTIN_IMPLS: DetectorImpl[] = [patternPii, secretsBuiltin, credentialFile, codeHeuristic, multiSignalFinancial, multiSignalPhi, multiSignalLegal, multiSignalConfidential];

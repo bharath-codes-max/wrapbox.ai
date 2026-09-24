@@ -17,7 +17,8 @@ import {
   type IntentClause, type Predicate, type CoreOp, type Op, type Decision,
   type ConstraintSpec, handlerDef,
 } from "./schema";
-import { networkPredicate, isCatchAll } from "./resolve";
+import { networkPredicate, isCatchAll, buildNetworkPredicate } from "./resolve";
+import { dataTypes, handlerFromLegacyMode, TRANSFORM_HANDLERS, registryPins } from "@wrapbox/registry";
 
 /* ------------------------------------------------------------------ *
  * The wire shapes the Control Plane stores / the daemon pulls.
@@ -28,11 +29,24 @@ export type CpEffect = "allow" | "constrain" | "block" | "review";
 /** A policy-core condition atom as stored in condition_json. */
 export interface WireCondition { field: string; op: CoreOp; value: string; }
 
-/** The v1 constraint shape the runtime's transform.ts already consumes. */
+/** The wire constraint: v1 `kind` for old runtimes, v2 handler/params for the registry-driven transform. */
 export interface WireConstraint {
   kind: "reversible_tokenize" | "redact";
   fields?: string[];
+  /** Registry ids (or legacy names) of the classes to protect. */
   classes?: string[];
+  handler?: keyof typeof TRANSFORM_HANDLERS;
+  params?: Record<string, unknown>;
+}
+
+/** Provenance the control plane stores and the daemon echoes into evidence. */
+export interface RuleMeta {
+  clause_id: string;
+  contract_id?: string;
+  ir_schema: string;
+  kind: "clause" | "carrier";
+  coverage: "enforced" | "degraded" | "understood_only" | "pending";
+  pins: ReturnType<typeof registryPins>;
 }
 
 /** A compiled, runnable rule — exactly what POST /v1/rules accepts. */
@@ -47,6 +61,7 @@ export interface CompiledRule {
   description?: string;
   /** Provenance: which clause produced this rule. Not enforced, for audit. */
   clause_id: string;
+  meta: RuleMeta;
 }
 
 export type CompileOutcome =
@@ -96,11 +111,22 @@ function lowerConstraint(spec: ConstraintSpec | undefined): { constraint: WireCo
     const named = spec?.handlers.map((h) => h.handler).join(", ") || "none";
     return { constraint: null, ok: false, why: `network plane cannot execute constraint handler(s): ${named}` };
   }
-  const mode = dt.params.mode === "redact" ? "redact" : "reversible_tokenize";
+  const handler: keyof typeof TRANSFORM_HANDLERS = typeof dt.params.handler === "string" && Object.hasOwn(TRANSFORM_HANDLERS, dt.params.handler)
+    ? (dt.params.handler as keyof typeof TRANSFORM_HANDLERS) : handlerFromLegacyMode(dt.params.mode);
+  const kind: WireConstraint["kind"] = TRANSFORM_HANDLERS[handler].legacyKind ?? (handler === "REVERSIBLE_TOKENIZE" ? "reversible_tokenize" : "redact");
   const fields = Array.isArray(dt.params.fields) ? (dt.params.fields as unknown[]).map(String) : undefined;
-  const classes = Array.isArray(dt.params.classes) ? (dt.params.classes as unknown[]).map(String) : undefined;
-  if (!fields?.length && !classes?.length) return { constraint: null, ok: false, why: "data.transform names no fields or classes" };
-  return { constraint: { kind: mode, ...(fields ? { fields } : {}), ...(classes ? { classes } : {}) }, ok: true };
+  const reg = dataTypes();
+  // Classes go on the wire as registry ids; a phrase is resolved, an id kept.
+  const rawClasses = Array.isArray(dt.params.classes) ? (dt.params.classes as unknown[]).map(String) : [];
+  const classes = rawClasses.map((c) => reg.resolve(c)?.id ?? c);
+  // Detectable ≠ transformable: drop types the registry declares unsafe for this
+  // handler; if nothing safe remains (and no fields), the rule fails closed.
+  const safe = classes.filter((c) => reg.transformSupport(c, handler) === "supported" || c.startsWith("CUSTOM."));
+  const params = dt.params.params && typeof dt.params.params === "object" ? (dt.params.params as Record<string, unknown>) : undefined;
+  if (!fields?.length && !safe.length && handler !== "LIMIT") {
+    return { constraint: null, ok: false, why: classes.length ? `${handler} is not safe for ${classes.join(", ")} (never transformed and forwarded)` : "data.transform names no fields or classes" };
+  }
+  return { constraint: { kind, handler, ...(fields?.length ? { fields } : {}), ...(safe.length ? { classes: safe } : {}), ...(params ? { params } : {}) }, ok: true };
 }
 
 /* ------------------------------------------------------------------ *
@@ -139,7 +165,7 @@ export function compileToRule(clause: IntentClause): CompileOutcome {
     // the reason the predicate is empty. The catch-all is recognised by its
     // SHAPE, never by an empty predicate.
     if (isCatchAll(clause) && b.effectiveDecision === "ALLOW") {
-      return { runnable: true, rule: { name: ruleName(clause), effect: "allow", priority: clause.priority, condition: null, clause_id: clause.id } };
+      return { runnable: true, rule: { name: ruleName(clause), effect: "allow", priority: clause.priority, condition: null, clause_id: clause.id, meta: metaFor(clause, "clause") } };
     }
     return { runnable: false, reason: "this clause names a scope (destination, data, or resource) that produced no network-observable predicate — refusing to compile it as match-everything" };
   }
@@ -172,6 +198,36 @@ function mkRule(clause: IntentClause, effect: CpEffect, pred: Predicate[], const
     ...(constraint ? { constraint } : {}),
     ...(gap ? { description: `DEGRADED — ${gap}` } : {}),
     clause_id: clause.id,
+    meta: metaFor(clause, "clause"),
+  };
+}
+
+function metaFor(clause: IntentClause, kind: RuleMeta["kind"]): RuleMeta {
+  return { clause_id: clause.id, ir_schema: "1.0.0", kind, coverage: clause.binding.status, pins: registryPins() };
+}
+
+/**
+ * A CARRIER rule stands in for a protection the runtime cannot enforce as
+ * written, when the admin chose `block` or `review` for that case: it applies
+ * the chosen decision to the likeliest carriers of the protected data —
+ * uploads and uninspectable bodies — within the clause's destination scope.
+ * Never emitted for hold_activation (the contract is held) or accept_risk
+ * (the acceptance is recorded instead).
+ */
+export function carrierRule(clause: IntentClause): CompiledRule | null {
+  if (clause.decision === "ALLOW") return null;
+  const st = clause.binding.status;
+  if (st === "enforced" || st === "degraded") return null;
+  const how = clause.onUnsupported;
+  if (how !== "block" && how !== "review") return null;
+  const build = buildNetworkPredicate(clause);
+  const destPreds = (build.pred ?? []).filter((p) => p.field === "tool_input.host" || p.field === "tool_input.destination_class").map(lowerPredicate);
+  const cond: WireCondition[] = [...destPreds, { field: "tool_input.carrier", op: "any_of", value: "upload|uninspectable" }];
+  return {
+    name: `${ruleName(clause)} — carrier rule (${clause.binding.rationale.slice(0, 100)})`,
+    effect: how, priority: clause.priority, condition: cond,
+    description: `UNENFORCEABLE AS WRITTEN — ${clause.binding.rationale}`,
+    clause_id: clause.id, meta: metaFor(clause, "carrier"),
   };
 }
 
@@ -199,8 +255,10 @@ export function compileContract(clauses: IntentClause[]): {
   const skipped: { clause_id: string; name: string; reason: string }[] = [];
   for (const c of clauses) {
     const out = compileToRule(c);
-    if (out.runnable) rules.push(out.rule);
-    else skipped.push({ clause_id: c.id, name: ruleName(c), reason: out.reason });
+    if (out.runnable) { rules.push(out.rule); continue; }
+    const carrier = carrierRule(c);
+    if (carrier) { rules.push(carrier); continue; }
+    skipped.push({ clause_id: c.id, name: ruleName(c), reason: out.reason });
   }
   return { rules, skipped };
 }

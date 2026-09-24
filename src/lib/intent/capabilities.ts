@@ -25,7 +25,8 @@ import type { IntentClause } from "./schema";
 import { detectorsForClass } from "./detectors";
 import { identityCanProve } from "./identity";
 import { resolveDestination } from "./resolve-dest";
-import { bridgeClass } from "./runtime";
+import { CONFIDENCE_RANK, covers, dataTypes, TRANSFORM_HANDLERS, handlerFromLegacyMode, type Confidence } from "@wrapbox/registry";
+import { formatsFor } from "./formats";
 
 /** A capability the enforcement fleet may or may not provide. Open namespace. */
 export type Capability = string;
@@ -115,14 +116,32 @@ export function requirements(clause: IntentClause): RequiredCapability[] {
   else if (localAct && ["payment_transaction", "payment_method"].includes(t)) R("observe.resource.payment", `authoritatively settle the ${t}`, "resource", "network");
   else if (localAct && t === "mcp_tool") R("observe.resource.mcp", "parse the MCP tool + arguments", "resource", "network");
 
-  // DATA — each class needs a DETECTOR for its family. detectableFamilies()
-  // answers; a known-but-undetected family (financial) is planned → understood_only;
-  // an unknown family is served by nobody → pending.
-  for (const cls of clause.data?.classes ?? []) R(`content.${classFamily(cls)}`, `recognise ${cls}`, "data", "network");
+  // DATA — each registry TYPE needs an AVAILABLE detector that emits it at the
+  // clause's confidence (I3). A registered-but-undetected type is planned →
+  // understood_only; an unregistered phrase (CUSTOM candidate) → pending.
+  const conf: Confidence = clause.data?.match?.minConfidence ?? "medium";
+  for (const cls of clause.data?.classes ?? []) R(`content.${classFamily(cls)}@${conf}`, `recognise ${cls} (≥${clause.data?.match?.minCount ?? 1}, ${conf} confidence)`, "data", "network");
   if (clause.data?.owner) R(`provenance.${String(clause.data.owner).toLowerCase()}`, `prove the data belongs to ${clause.data.owner}`, "data", "network");
+  // PARSE — a content protection must be able to READ every carrier format the
+  // resource may arrive in; an unreadable one fails closed at runtime, and the
+  // clause is DEGRADED here so the coverage says so.
+  if (clause.data?.classes?.length && clause.decision !== "ALLOW") for (const f of formatsFor(clause)) R(`parse.${f}`, `read ${f} uploads`, "resource", "network", ["text", "json", "multipart"].includes(f));
 
-  // TRANSFORM — a CONSTRAIN handler must be EXECUTABLE.
-  if (clause.decision === "CONSTRAIN") for (const h of clause.constraint?.handlers ?? []) R(`transform.${h.handler}`, `apply ${h.handler}`, "transform", handlerPlane(h.handler));
+  // TRANSFORM — a CONSTRAIN handler must be EXECUTABLE, for EACH targeted type
+  // (detectable ≠ transformable: the Transform Registry decides per type).
+  if (clause.decision === "CONSTRAIN") for (const h of clause.constraint?.handlers ?? []) {
+    if (h.handler === "data.transform") {
+      const p = h.params as { mode?: unknown; classes?: unknown; fields?: unknown; handler?: unknown };
+      const handler = typeof p.handler === "string" && Object.hasOwn(TRANSFORM_HANDLERS, p.handler) ? p.handler : handlerFromLegacyMode(p.mode);
+      const classes = Array.isArray(p.classes) ? (p.classes as string[]) : (clause.data?.classes ?? []);
+      const fields = Array.isArray(p.fields) ? (p.fields as string[]) : [];
+      if (!classes.length && fields.length) R(`transform.${handler}.fields`, `apply ${handler} to named fields`, "transform", "network");
+      for (const c of classes) R(`transform.${handler}.${classFamily(c)}`, `apply ${handler} to ${c}`, "transform", "network");
+      if (!classes.length && !fields.length && handler !== "LIMIT") R("transform.none", "a CONSTRAIN names nothing to transform", "transform", "network");
+    } else {
+      R(`transform.${h.handler}`, `apply ${h.handler}`, "transform", handlerPlane(h.handler));
+    }
+  }
 
   // REVIEW — hold-and-approve. The network daemon has it.
   if (clause.decision === "REVIEW") R("review.hold", "hold the request until a human decides", "review", "network");
@@ -156,27 +175,17 @@ const NETWORK_OBSERVED = new Set<string>([
   "tool_input.bytes", "tool_input.has_file_upload", "tool_input.agent", "tool_input.device_id",
 ]);
 
-/** Map a fine-grained semantic class to its detector FAMILY (the capability
- *  a detector registers). Families are open — a new one is just a new string. */
+/**
+ * Map an admin's class phrase (or a registry id) to the registry TYPE the
+ * capability system reasons about. The registry's alias index is the ONLY
+ * table consulted; an unresolvable phrase becomes a CUSTOM candidate id so it
+ * is visibly pending rather than silently adjacent to something else.
+ */
 export function classFamily(cls: string): string {
-  const c = cls.toLowerCase().replace(/[\s-]+/g, "_").trim();
-  // First the runtime-observable families, via the same synonym table the
-  // classifier honours (email/customer_pii/… → pii, credentials/secrets → secret,
-  // cards → pii because the deterministic detector emits pii for card numbers).
-  const bridged = bridgeClass(c);
-  if (bridged) return bridged;
-  // Then enterprise families that are real but not yet detected.
-  const EXT: Record<string, string> = {
-    financial: "financial", revenue: "financial", finance: "financial",
-    phi: "phi", health: "phi", medical: "phi", patient: "phi",
-    pci: "pci", card_data: "pci",
-    legal: "legal", contract: "legal", nda: "legal",
-    ip: "ip", intellectual_property: "ip", trade_secret: "ip",
-    confidential: "confidential", restricted: "confidential", internal_only: "confidential",
-    regulated: "regulated", export_controlled: "export_controlled",
-    employee_data: "employee_data", customer_data: "pii", m_and_a: "m_and_a", merger_acquisition: "m_and_a",
-  };
-  return Object.hasOwn(EXT, c) ? EXT[c] : c; // unknown → its own family (→ pending)
+  const r = dataTypes().resolve(cls);
+  if (r) return r.id;
+  if (/^[A-Z][A-Z0-9_]*(\.[A-Za-z0-9_-]+)*$/.test(cls)) return cls;   // already an id (e.g. CUSTOM.acme.X)
+  return `CUSTOM.?.${cls.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "UNKNOWN"}`;
 }
 
 
@@ -212,11 +221,8 @@ export interface StatusVerdict {
  *  clause needing one is understood_only (a detector could exist) rather than
  *  pending. Open — add a family string and existing contracts improve when its
  *  detector registers. */
-const KNOWN_FAMILIES = new Set<string>([
-  "pii", "secret", "source_code", "credential_file",
-  "financial", "phi", "pci", "legal", "ip", "confidential", "regulated",
-  "export_controlled", "employee_data", "customer_data", "health", "m_and_a",
-]);
+// (The former KNOWN_FAMILIES list is gone: the Data Type Registry is the one
+// authority on which types are real.)
 
 /**
  * Is a capability KNOWN-BUT-UNBUILT (some plane or future detector could serve
@@ -225,13 +231,27 @@ const KNOWN_FAMILIES = new Set<string>([
  * without enumerating them.
  */
 function isPlanned(cap: Capability): boolean {
-  if (cap.startsWith("content.")) return true;   // any named data class is a plannable detector
+  if (cap.startsWith("content.")) {
+    // A REGISTERED type is plannable (a detector could exist); a CUSTOM
+    // candidate the tenant never registered is genuinely unknown → pending.
+    const type = cap.slice("content.".length).split("@")[0];
+    if (type.startsWith("CUSTOM.?.")) return false;
+    const reg = dataTypes();
+    return reg.has(type) || reg.lineage(type).some((a) => reg.has(a));
+  }
+  if (cap.startsWith("parse.")) return true;
   if (cap.startsWith("provenance.")) return true;                 // provenance detectors are planned
   if (cap.startsWith("observe.resource.")) return true;           // endpoint/gateway resource observation
   if (cap.startsWith("observe.tool_input.")) return true;         // richer body-field extraction is planned
   if (cap.startsWith("observe.")) return true;                    // future signals generally
   if (cap.startsWith("identity.")) return true;                   // IdP/MDM integrations
-  if (cap.startsWith("transform.")) return isKnownHandler(cap.slice("transform.".length));
+  if (cap.startsWith("transform.")) {
+    const rest = cap.slice("transform.".length);
+    if (rest === "none") return false;
+    const head = rest.split(".")[0];
+    if (Object.hasOwn(TRANSFORM_HANDLERS, head)) return true;   // registry handler for some type: plannable
+    return isKnownHandler(rest);
+  }
   if (cap.startsWith("destination.")) return true;
   if (cap.startsWith("route.")) return true;
   return false;
@@ -250,6 +270,44 @@ const KNOWN_HANDLERS = new Set<string>([
 ]);
 
 /**
+ * Does a provided-capability set satisfy a requirement? Exact match for most;
+ * content requirements (`content.<TYPE>@<conf>`) are met by a provided
+ * `content.<EMITTED>:<conf>` whose type covers the wanted one (either is a
+ * prefix of the other) at ≥ the required confidence; transform requirements
+ * (`transform.<HANDLER>.<TYPE>`) by a provided handler for a type prefix (or
+ * "*"), AND only if the Data Type Registry declares the pair safe.
+ */
+export function provides(deployed: Set<Capability>, cap: Capability): boolean {
+  if (deployed.has(cap)) return true;
+  if (cap.startsWith("content.")) {
+    const [type, conf = "low"] = cap.slice("content.".length).split("@");
+    const need = CONFIDENCE_RANK[conf as Confidence] ?? 0;
+    for (const p of deployed) {
+      if (!p.startsWith("content.")) continue;
+      const [emitted, pc = "low"] = p.slice("content.".length).split(":");
+      if (covers(emitted, type) && (CONFIDENCE_RANK[pc as Confidence] ?? 0) >= need) return true;
+    }
+    return false;
+  }
+  if (cap.startsWith("transform.")) {
+    const rest = cap.slice("transform.".length);
+    const [handler, ...tail] = rest.split(".");
+    const type = tail.join(".");
+    if (!(Object.hasOwn(TRANSFORM_HANDLERS, handler))) return false;
+    if (type === "fields") return [...deployed].some((p) => p.startsWith(`transform.${handler}.`));
+    const reg = dataTypes();
+    if (reg.transformSupport(type, handler as keyof typeof TRANSFORM_HANDLERS) !== "supported") return false;
+    for (const p of deployed) {
+      if (!p.startsWith(`transform.${handler}.`)) continue;
+      const prefix = p.slice(`transform.${handler}.`.length);
+      if (prefix === "*" || reg.isWithin(type, prefix)) return true;
+    }
+    return false;
+  }
+  return false;
+}
+
+/**
  * The mechanical verdict. `deployed` is the set of capabilities the deployed
  * fleet provides right now (the network plane's self-description). Everything
  * else is decided by isPlanned(). No per-concept branches.
@@ -264,8 +322,8 @@ export function deriveStatus(reqs: RequiredCapability[], deployedPlanes: PlaneCa
     return { status: "enforced", plane: net?.plane ?? "network", met: [], notProven: [], missingButPlanned: [], pending: [], boundPlane: net?.plane ?? "network", plannedPlane: null };
   }
 
-  const met = security.filter((r) => deployed.has(r.capability));
-  const unmet = security.filter((r) => !deployed.has(r.capability));
+  const met = security.filter((r) => provides(deployed, r.capability));
+  const unmet = security.filter((r) => !provides(deployed, r.capability));
   const pending = unmet.filter((r) => !isPlanned(r.capability));
   const planned = unmet.filter((r) => isPlanned(r.capability));
 

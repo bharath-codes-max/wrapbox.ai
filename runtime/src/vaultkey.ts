@@ -21,7 +21,16 @@ import { execFileSync } from "node:child_process";
 import { PATHS } from "./config.js";
 
 const SERVICE = "io.wrapbox.vault";
-const KEY_FILE = () => path.join(PATHS.home, "vault.key");
+/**
+ * The key file lives OUTSIDE the state directory (Application Support, 0600),
+ * so a copied WRAPBOX_HOME does not carry its own decryption key. Keychain
+ * storage is opt-in (WRAPBOX_VAULT_KEYCHAIN=1): from an unsigned launchd
+ * daemon the `security` tool can trigger a SecurityAgent prompt, which a
+ * daemon cannot answer — it would hang, not protect. A signed app bundle with
+ * a keychain ACL is the production path and is reported as absent until then.
+ */
+const KEY_FILE = () => process.env.WRAPBOX_VAULT_KEY_FILE
+  ?? path.join(process.env.HOME ?? PATHS.home, "Library", "Application Support", "Wrapbox", `vault-${account()}.key`);
 const VERSION = "wbxv1";
 
 let cached: { key: Buffer; source: "keychain" | "file" } | null = null;
@@ -34,7 +43,7 @@ function account(): string {
 function keychainGet(): Buffer | null {
   if (process.platform !== "darwin") return null;
   try {
-    const out = execFileSync("security", ["find-generic-password", "-s", SERVICE, "-a", account(), "-w"], { stdio: ["ignore", "pipe", "ignore"], timeout: 3000 }).toString().trim();
+    const out = execFileSync("security", ["find-generic-password", "-s", SERVICE, "-a", account(), "-w"], { stdio: ["ignore", "pipe", "ignore"], timeout: 8000 }).toString().trim();
     const key = Buffer.from(out, "hex");
     return key.length === 32 ? key : null;
   } catch { return null; }
@@ -43,7 +52,10 @@ function keychainGet(): Buffer | null {
 function keychainSet(key: Buffer): boolean {
   if (process.platform !== "darwin") return false;
   try {
-    execFileSync("security", ["add-generic-password", "-s", SERVICE, "-a", account(), "-w", key.toString("hex"), "-U", "-T", ""], { stdio: "ignore", timeout: 3000 });
+    // -T /usr/bin/security: let the security tool itself read the item back
+    // without an interactive prompt (a daemon has no UI to answer one). No
+    // other application is granted access.
+    execFileSync("security", ["add-generic-password", "-s", SERVICE, "-a", account(), "-w", key.toString("hex"), "-U", "-T", "/usr/bin/security"], { stdio: "ignore", timeout: 8000 });
     return keychainGet() !== null;
   } catch { return false; }
 }
@@ -56,7 +68,7 @@ function fileGet(): Buffer | null {
 }
 
 function fileSet(key: Buffer): void {
-  fs.mkdirSync(PATHS.home, { recursive: true });
+  fs.mkdirSync(path.dirname(KEY_FILE()), { recursive: true, mode: 0o700 });
   fs.writeFileSync(KEY_FILE(), key.toString("hex") + "\n", { mode: 0o600 });
   fs.chmodSync(KEY_FILE(), 0o600);
 }
@@ -64,7 +76,7 @@ function fileSet(key: Buffer): void {
 /** Obtain (or create) the vault key. Keychain first, file fallback. */
 export function vaultKey(): { key: Buffer; source: "keychain" | "file" } {
   if (cached) return cached;
-  const allowKeychain = process.env.WRAPBOX_VAULT_KEYCHAIN !== "0";
+  const allowKeychain = process.env.WRAPBOX_VAULT_KEYCHAIN === "1";
   let key = allowKeychain ? keychainGet() : null;
   if (key) { cached = { key, source: "keychain" }; return cached; }
   key = fileGet();

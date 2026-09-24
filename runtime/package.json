@@ -13,13 +13,14 @@
   },
   "dependencies": {
     "@wrapbox/policy-core": "file:../packages/policy-core",
+    "@wrapbox/registry": "file:../packages/registry",
     "nanoid": "^5.1.0",
     "tree-sitter-wasms": "^0.1.13",
-    "web-tree-sitter": "^0.27.0",
-    "@wrapbox/registry": "file:../packages/registry"
+    "web-tree-sitter": "^0.27.0"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",
+    "smol-toml": "^1.9.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   },

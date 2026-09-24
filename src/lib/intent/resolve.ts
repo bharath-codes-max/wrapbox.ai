@@ -22,8 +22,11 @@ import {
   type IntentClause, type EnforcementBinding, type EnforcementPlane, type BindingStatus,
   type Predicate, type PredicateSet, type Decision, handlerDef,
 } from "./schema";
-import { NETWORK_RUNTIME, bridgeClass, bridgeClasses, networkCapabilities, futurePlaneCapabilities } from "./runtime";
+import { NETWORK_RUNTIME, bridgeClass, networkCapabilities, futurePlaneCapabilities } from "./runtime";
+import { dataTypes, expandClass, isTransformable, handlerFromLegacyMode, TRANSFORM_HANDLERS } from "@wrapbox/registry";
+import { runtimeSnapshot } from "./snapshot";
 import { observableKinds } from "./detectors";
+import { formatsFor } from "./formats";
 import { requirements, deriveStatus, classFamily, type StatusVerdict } from "./capabilities";
 import { resolveNames, resolveGroup, resolveCategory, hostInRegex, hostNotInRegex, type HostResolution } from "./destinations";
 
@@ -139,7 +142,7 @@ const GATEWAY_OBJECTS = new Set<string>(["iam_role", "cloud_resource", "column",
  * Returning null means "not owned by a future plane" — the caller then tries
  * the network plane, which decides for itself what it can observe.
  */
-function ownedByFuturePlane(clause: IntentClause): EnforcementPlane | null {
+export function ownedByFuturePlane(clause: IntentClause): EnforcementPlane | null {
   const verb = clause.action.verbs?.[0];
   const d = clause.destination;
   const hasDestination = Boolean(d && (d.any || d.host?.length || d.category?.length || d.service?.length || d.trust || d.namedSet || d.match));
@@ -204,10 +207,36 @@ export function buildNetworkPredicate(clause: IntentClause): PredicateBuild {
   const out: Predicate[] = [];
   const build: PredicateBuild = { pred: null, unobservableClasses: [], unresolvedDestinations: [], filenameNotBoundary: false };
 
-  // Destination — exact hosts, or the complement of exact hosts.
+  // Destination — CLASSES first (resolved by the runtime per request, so an
+  // uncatalogued host still lands in UNKNOWN_EXTERNAL), then exact hosts, or
+  // the complement of exact hosts.
   const dest = resolveDestination(clause);
-  if (dest.hosts.length) out.push({ field: "tool_input.host", op: "regex", value: hostInRegex(dest.hosts) });
+  const protection = clause.decision !== "ALLOW";
+  const classes = new Set<string>();
+  for (const c of clause.destination?.classes ?? []) for (const x of expandClass(c)) classes.add(x);
+  // A PROTECTION over "any AI" must also cover a host nobody has catalogued: the
+  // runtime cannot know that a brand-new external host is an AI service, so the
+  // fail-closed reading includes UNKNOWN_EXTERNAL. A PERMISSION never widens.
+  if (protection && classes.size && (clause.destination?.classes ?? []).some((c) => c === "ANY_AI" || c === "APPROVED_AI" || c === "KNOWN_AI_UNAPPROVED")) classes.add("UNKNOWN_EXTERNAL");
+  if (classes.size) out.push({ field: "tool_input.destination_class", op: "any_of", value: [...classes].join("|") });
+  const notClasses = new Set<string>();
+  for (const c of clause.destination?.notIn?.classes ?? []) for (const x of expandClass(c)) notClasses.add(x);
+  if (notClasses.size) out.push({ field: "tool_input.destination_class", op: "none_of", value: [...notClasses].join("|") });
+  // Positive hosts: for a protection scoped by CLASS, hosts that came only from
+  // the category catalogue would re-narrow the class to known vendors — drop
+  // them; hosts the admin NAMED (services/group/literal) always stay.
+  let positiveHosts = dest.hosts;
+  if (protection && classes.size) {
+    const d = clause.destination!;
+    const named = resolveNames([...(d.service ?? []), ...(d.host ?? [])]).hosts;
+    const grp = d.group ? resolveGroup(d.group).hosts : [];
+    positiveHosts = [...new Set([...named, ...grp])];
+  }
+  if (positiveHosts.length) out.push({ field: "tool_input.host", op: "regex", value: hostInRegex(positiveHosts) });
   if (dest.notHosts.length) out.push({ field: "tool_input.host", op: "regex", value: hostNotInRegex(dest.notHosts) });
+  // A protection stated only as a complement ("anywhere other than X") with no
+  // class must still apply to every external class, not only catalogued hosts.
+  if (dest.notHosts.length && !classes.size && !dest.hosts.length && clause.decision !== "ALLOW") out.push({ field: "tool_input.destination_class", op: "any_of", value: expandClass("ANY_EXTERNAL").join("|") });
   build.unresolvedDestinations = dest.unresolved;
 
   // Resource attribute predicates (host/method already in wire terms).
@@ -220,15 +249,16 @@ export function buildNetworkPredicate(clause: IntentClause): PredicateBuild {
   // class is observable iff a registered detector produces its family. The
   // family is also the runtime content-kind to match on. Register a detector →
   // this starts emitting a predicate, with no edit here.
-  const classes = clause.data?.classes ?? [];
-  const bridged = observableKinds(classes, classFamily);
-  // Several kinds are DISJUNCTIVE: "PII and credentials must never be sent"
-  // means either one. Emitting one predicate per kind would AND them, so a
-  // request would need ALL of them to match. One OR-regex over the runtime's
-  // comma-joined content_kinds list. (For BLOCK/REVIEW/CONSTRAIN this is the
-  // stricter reading; for ALLOW it is what the admin meant.)
-  if (bridged.kinds.length === 1) out.push({ field: "tool_input.content_kinds", op: "contains", value: bridged.kinds[0] });
-  else if (bridged.kinds.length > 1) out.push({ field: "tool_input.content_kinds", op: "regex", value: `(^|,)(${bridged.kinds.join("|")})(,|$)` });
+  const dataClasses = clause.data?.classes ?? [];
+  const match = clause.data?.match ?? { minCount: 1, minConfidence: "medium" as const, scope: "any" as const, origin: "registry" as const };
+  const bridged = observableKinds(dataClasses, match.minConfidence);
+  // Several types are DISJUNCTIVE: "PII and credentials must never be sent"
+  // means either one. One structured `finding` predicate carries the whole
+  // OR-set with the clause's count and confidence semantics — the single-
+  // instance PII gap is closed here, generically, for every type.
+  if (bridged.types.length) {
+    out.push({ field: "tool_input.findings_v2", op: "finding", value: JSON.stringify({ any: bridged.types.map((t) => ({ type: t, minCount: match.minCount, minConfidence: match.minConfidence })) }) });
+  }
   build.unobservableClasses = bridged.unobservable;
 
   // Filenames are SUPPORTING evidence, not the security boundary. For a
@@ -238,7 +268,7 @@ export function buildNetworkPredicate(clause: IntentClause): PredicateBuild {
   // plain "these file types may be uploaded" permission), filenames legitimately
   // scope it.
   const globs = clause.resource.path?.include ?? [];
-  if (globs.length && classes.length === 0) {
+  if (globs.length && dataClasses.length === 0) {
     // "PDF, CSV and XLSX may be uploaded" — ANY of them, not all at once. One
     // OR-regex over the runtime's comma-joined filename list; per-glob
     // predicates would AND together and no single upload could ever match.
@@ -251,7 +281,7 @@ export function buildNetworkPredicate(clause: IntentClause): PredicateBuild {
     }
     if (alts.length === 1) out.push({ field: "tool_input.filenames", op: "regex", value: `${alts[0]}(,|$)` });
     else if (alts.length > 1) out.push({ field: "tool_input.filenames", op: "regex", value: `(${alts.join("|")})(,|$)` });
-  } else if (globs.length && classes.length > 0) {
+  } else if (globs.length && dataClasses.length > 0) {
     build.filenameNotBoundary = true;
   }
 
@@ -297,7 +327,19 @@ function effectiveDecisionFor(clause: IntentClause, plane: PlaneFrame): Decision
       // while the runtime BLOCKs it. Both layers now agree.
       const hasFields = Array.isArray(p.fields) && p.fields.length > 0;
       const classes = Array.isArray(p.classes) ? (p.classes as string[]) : [];
-      const anyMaskable = classes.some((c) => bridgeClass(c) === "pii");
+      const rawHandler = (p as { handler?: unknown }).handler;
+      const handler: keyof typeof TRANSFORM_HANDLERS = typeof rawHandler === "string" && Object.hasOwn(TRANSFORM_HANDLERS, rawHandler)
+        ? (rawHandler as keyof typeof TRANSFORM_HANDLERS) : handlerFromLegacyMode((p as { mode?: unknown }).mode);
+      const reg = dataTypes();
+      const rt = runtimeSnapshot();
+      // Executable iff the registry declares the (type, handler) pair safe AND
+      // the deployed runtime implements the handler for that type prefix.
+      const anyMaskable = classes.some((c) => {
+        const id = reg.resolve(c)?.id ?? c;
+        if (reg.transformSupport(id, handler) !== "supported") return false;
+        return rt.transforms.some((t) => t.handler === handler && t.types.some((pre) => pre === "*" || reg.isWithin(id, pre)));
+      });
+      void isTransformable; void bridgeClass;
       return hasFields || anyMaskable;
     }
     return true;
@@ -361,7 +403,8 @@ export function resolveBinding(
   // have no detector" — value-level facts that downgrade an otherwise-enforced
   // clause without ever silently widening it.
   const dest = resolveDestination(clause);
-  const destStatedUnresolved = dest.stated && dest.hosts.length === 0 && dest.notHosts.length === 0;
+  const hasClassScope = Boolean(clause.destination?.classes?.length || clause.destination?.notIn?.classes?.length);
+  const destStatedUnresolved = dest.stated && dest.hosts.length === 0 && dest.notHosts.length === 0 && !hasClassScope;
   const valueGaps: string[] = [];
   let downgraded: "degraded" | "understood_only" | null = null;
 
@@ -373,7 +416,7 @@ export function resolveBinding(
     else { downgraded = "understood_only"; destDrivenPlane = true; valueGaps.push(`“${named}” names a set the runtime has no addresses for — define which hosts it contains to enforce it.`); }
   }
   const declaredClasses = clause.data?.classes ?? [];
-  const someObservable = (build.pred ?? []).some((p) => p.field === "tool_input.content_kinds");
+  const someObservable = (build.pred ?? []).some((p) => p.field === "tool_input.findings_v2");
   if (declaredClasses.length && !someObservable) {
     // The data class IS the security point and NONE of it is observable — a
     // host-only match would be over-broad, so this is not enforced today.
@@ -413,6 +456,15 @@ export function resolveBinding(
   const plane = (verdict.status === "pending" ? null : verdict.status === "enforced" || verdict.status === "degraded" ? (verdict.boundPlane ?? verdict.plannedPlane) : (verdict.plannedPlane ?? verdict.plane)) as EnforcementPlane | null;
   const enforceable = verdict.status === "enforced" || verdict.status === "degraded";
 
+  const notesForClause: string[] = [];
+  // Formats the deployed runtime cannot read are BLOCKED rather than inspected
+  // (fail closed) — that is not a silent gap, but the admin should know.
+  if (clause.data?.classes?.length && clause.decision !== "ALLOW") {
+    const rt = runtimeSnapshot();
+    const readable = new Set(rt.extractors.filter((e) => e.available).flatMap((e) => e.formats));
+    const blocked = ["pdf", "pptx", "zip", "image", "eml"].filter((f) => !readable.has(f));
+    if (blocked.length) notesForClause.push(`${blocked.join("/")} uploads are blocked rather than inspected until an extractor (Tika sidecar / OCR helper) is configured`);
+  }
   // Build the human rationale + coverage gap FROM the verdict — one code path.
   const gapParts: string[] = [...new Set([...valueGaps, ...verdict.notProven.map((r) => gapText(r, clause))])];
   // A degraded network clause is also bypassable by non-proxied transports.
@@ -438,8 +490,16 @@ export function resolveBinding(
       : `${missingText || describeResource(clause) || "this clause"} — not observable by the deployed runtime today; the intent is retained, not enforced`;
   }
 
-  const notes: string[] = [];
+  const notes: string[] = [...notesForClause];
   if (build.filenameNotBoundary) notes.push("file type is supporting evidence only — the content classes are the pin, so renaming a file does not defeat this rule");
+  const rtCov = runtimeSnapshot();
+  if (clause.decision !== "ALLOW" && rtCov.transport.neverDecrypt.length) {
+    const inScope = new Set<string>();
+    for (const c of clause.destination?.classes ?? []) for (const x of expandClass(c)) inScope.add(x);
+    const exemptInScope = rtCov.transport.neverDecrypt.filter((c) => inScope.has(c));
+    if (!clause.destination || exemptInScope.length) notes.push("personal banking/health/payroll and OS-infrastructure hosts are never decrypted (host-level decision only) — tenant-editable exemption list");
+  }
+  void formatsFor;
 
   return {
     plane,
