@@ -123,6 +123,15 @@ interface Prepared {
 
 /** Phase A (sync): split, Tier-0 extract, label metadata. */
 function prepare(body: Buffer, contentType: string): Prepared {
+  // An empty request body carries no content to inspect (a bodyless GET/HEAD/
+  // OPTIONS, a CONNECT, a bare form POST). There is nothing that could be
+  // exfiltrated, so this is "inspected, found nothing" — NOT uninspectable.
+  // Treating it as UNINSPECTABLE would fail a content protection closed on
+  // ordinary bodyless traffic. Destination-only protections still apply: the
+  // gate evaluates them regardless of body.
+  if (body.length === 0) {
+    return { parts: [], multipart: false, units: [], truncated: false, pending: [], failure: null, filenames: [], hasFileUpload: false, bytes: 0 };
+  }
   const { parts, multipart, malformed } = splitParts(body, contentType);
   const filenames = parts.map((p) => p.filename).filter((f): f is string => !!f);
   const hasFileUpload = parts.some((p) => p.isFile);
