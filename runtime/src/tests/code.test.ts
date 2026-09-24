@@ -378,7 +378,7 @@ for (const [lang, src] of Object.entries(SNIPPETS)) {
     assert.equal(f.confidence, "high");
     assert.equal(f.count, 1);
     assert.equal(f.detector, "wrapbox.code.treesitter");
-    assert.ok(!types(fs).includes("SOURCE_CODE.BUILD_CONFIG"));
+    assert.ok(!types(fs).includes("CONFIG.BUILD"));
     assert.equal(mod.lastError, null);
   });
   test(`${lang}: recognised with no filename at all`, () => {
@@ -407,7 +407,7 @@ test("candidate nomination is bounded to three grammars and empty for prose", ()
 test("package.json is BUILD_CONFIG, never SOURCE_CODE", () => {
   for (const extra of [{ filename: "package.json" }, { filename: "package.json", format: "json" }, {}]) {
     const fs = det(PACKAGE_JSON, extra);
-    assert.ok(types(fs).includes("SOURCE_CODE.BUILD_CONFIG"), JSON.stringify(fs));
+    assert.ok(types(fs).includes("CONFIG.BUILD"), JSON.stringify(fs));
     assert.ok(!types(fs).includes("SOURCE_CODE"), `must never be SOURCE_CODE: ${JSON.stringify(fs)}`);
   }
   assert.equal(det(PACKAGE_JSON, { filename: "package.json" })[0].label, "config:manifest:package.json");
@@ -431,7 +431,7 @@ test("terraform, plain yaml, toml, ini, Dockerfile classify by shape", () => {
   const toml = `[package]\nname = "${MARK}"\nversion = "0.1.0"\n\n[dependencies]\nserde = "1.0"\n`;
   assert.equal(classifyConfig(toml)?.label, "config:toml");
   const ini = `[core]\nrepositoryformatversion = 0\nfilemode = true\nbare = false\n[remote "origin"]\nurl = git@example.com:x/y.git\n`;
-  assert.equal(classifyConfig(ini)?.type, "SOURCE_CODE.BUILD_CONFIG");
+  assert.equal(classifyConfig(ini)?.type, "CONFIG.BUILD");
   const docker = `FROM node:22-alpine\nWORKDIR /app\nCOPY . .\nRUN npm ci\nCMD ["node", "dist/cli.js"]\n`;
   assert.equal(classifyConfig(docker)?.label, "config:manifest:dockerfile");
   for (const src of [tf, yaml, toml, ini, docker]) assert.ok(!types(det(src)).includes("SOURCE_CODE"));
@@ -449,7 +449,7 @@ test("JSON body with an embedded python function: BUILD_CONFIG for the document,
   assert.equal(emb.label, "embedded");
   assert.equal(emb.count, 1);
   assert.deepEqual(emb.fields, ["messages[].content"]);
-  assert.ok(types(fs).includes("SOURCE_CODE.BUILD_CONFIG"));
+  assert.ok(types(fs).includes("CONFIG.BUILD"));
   // Text-only presentation of the same body (no json view) reaches the same conclusion.
   const fs2 = det(text);
   assert.equal(codeFinding(fs2)?.label, "embedded");

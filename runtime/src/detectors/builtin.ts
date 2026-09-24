@@ -240,7 +240,7 @@ export const codeHeuristic: DetectorImpl = {
     if (!text) return [];
     const name = input.filename ?? "";
     if (CONFIG_EXTENSIONS.test(name) || input.format === "json" || input.format === "yaml") {
-      return [finding(codeHeuristic, "SOURCE_CODE.BUILD_CONFIG", 1, "medium", { label: name ? `config:${name.slice(0, 64)}` : "config", ...(input.unitPath ? { unitPath: input.unitPath } : {}) })];
+      return [finding(codeHeuristic, "CONFIG.BUILD", 1, "medium", { label: name ? `config:${name.slice(0, 64)}` : "config", ...(input.unitPath ? { unitPath: input.unitPath } : {}) })];
     }
     let score = 0;
     for (const s of CODE_SIGNALS) if (s.re.test(text)) score += s.weight;

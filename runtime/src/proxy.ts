@@ -27,7 +27,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { URL } from "node:url";
 import { loadConfig, PATHS, type Config } from "./config.js";
-import { loadCachedRules, evaluate, applyProjectFilter, type ToolCall, type Rule } from "./policy.js";
+import { loadCachedRules, evaluate, applyProjectFilter, type ToolCall, type Rule, type CachedRule } from "./policy.js";
 import { makeReceipt, appendToSpool } from "./receipts.js";
 import { interceptTls, shouldInspect, closeMitm, type EgressRequest, type EgressVerdict } from "./mitm.js";
 import { caExists } from "./ca.js";
@@ -213,6 +213,77 @@ function writeReceipt(cfg: Config, host: string, port: number, agent: string, se
 }
 
 /**
+ * The pure egress judgement — the exact code the daemon runs, exported so the
+ * coverage matrix tests it with no socket in the way.
+ *
+ * The facts handed to the engine are ABOUT the content, never the content:
+ * typed findings with counts and confidence, the destination CLASS the
+ * registry resolved for this host, the carrier (body / upload / uninspectable)
+ * and, for compatibility, the coarse kinds and labels older rules match on.
+ *
+ * FAIL-CLOSED INSPECTION GATE (§4): a body we could not fully read is judged
+ * as if it held every registry type in bulk at high confidence on an
+ * uninspectable carrier. If any protection would fire for this destination,
+ * the request is blocked; if none could, allowing it is consistent with
+ * policy and an unreadable body is not punished needlessly.
+ */
+export function judgeEgress(
+  allRules: CachedRule[],
+  r: Pick<EgressRequest, "host" | "port" | "method" | "path" | "classification">,
+  agent: string,
+  destinationRegistry = tenantDestinations(),
+  deviceId?: string,
+): { call: ToolCall; decision: ReturnType<typeof evaluate>; matched: CachedRule | undefined; failClosed: boolean; dest: ReturnType<typeof destinationRegistry.classify> } {
+  const rules = applyProjectFilter(allRules, undefined);
+  const dest = destinationRegistry.classify(r.host, r.path);
+  const c2 = r.classification;
+  const carrier = c2.inspection !== "inspected" ? "uninspectable" : c2.hasFileUpload ? "upload" : "body";
+  const call: ToolCall = {
+    tool_name: "network.egress",
+    tool_input: {
+      host: r.host,
+      port: r.port,
+      method: r.method,
+      path: r.path,
+      agent,
+      ...(deviceId ? { device_id: deviceId } : {}),
+      // ── v2: what registry-driven rules match on ──
+      destination_class: dest.class, ...(dest.service ? { service: dest.service } : {}),
+      findings_v2: c2.typed.map((f) => ({ type: f.type, count: f.count, confidence: f.confidence })),
+      finding_types: c2.types,
+      inspection: c2.inspection, ...(c2.state ? { uninspectable_state: c2.state } : {}),
+      carrier,
+      extractor: c2.extractor,
+      // ── v1 (kept for older rules) ──
+      content_kinds: c2.kinds,
+      findings: c2.findings.map((f) => f.label),
+      filenames: c2.filenames,
+      bytes: c2.bytes,
+      has_file_upload: c2.hasFileUpload,
+      uninspected: !c2.inspectable,
+    },
+  };
+
+  let d = evaluate(call, rules);
+  let matched = d.matched_rule_id ? allRules.find((x) => x.id === d.matched_rule_id) : undefined;
+  let failClosed = false;
+  if (!c2.inspectable) {
+    const worst = evaluate(
+      { ...call, tool_input: { ...call.tool_input, content_kinds: RUNTIME_CONTENT_KINDS, findings: RUNTIME_FINDING_LABELS, has_file_upload: true,
+        findings_v2: [...dataTypes().ids().map((t) => ({ type: t, count: 1_000_000, confidence: "high" })), ...c2.typed.map((f) => ({ type: f.type, count: f.count, confidence: f.confidence }))],
+        finding_types: dataTypes().ids(), carrier: "uninspectable" } },
+      rules,
+    );
+    if (worst.effect === "block" || worst.effect === "review" || worst.effect === "constrain") {
+      failClosed = true;
+      d = { ...worst, effect: "block" };
+      matched = worst.matched_rule_id ? allRules.find((x) => x.id === worst.matched_rule_id) : undefined;
+    }
+  }
+  return { call, decision: d, matched, failClosed, dest };
+}
+
+/**
  * Content-level decision, taken once TLS has been terminated and the whole
  * body is in hand — but before any upstream connection exists.
  *
@@ -242,71 +313,8 @@ function decideEgress(
     return v;
   }
 
-  const rules = applyProjectFilter(cached.rules, undefined);
-  const dest = tenantDestinations().classify(r.host, r.path);
-  const c2 = r.classification;
-  const carrier = c2.inspection !== "inspected" ? "uninspectable" : c2.hasFileUpload ? "upload" : "body";
-  const call: ToolCall = {
-    tool_name: "network.egress",
-    tool_input: {
-      host: r.host,
-      port: r.port,
-      method: r.method,
-      path: r.path,
-      agent,
-      // ── v2: what registry-driven rules match on ──
-      destination_class: dest.class, ...(dest.service ? { service: dest.service } : {}),
-      findings_v2: c2.typed.map((f) => ({ type: f.type, count: f.count, confidence: f.confidence })),
-      finding_types: c2.types,
-      inspection: c2.inspection, ...(c2.state ? { uninspectable_state: c2.state } : {}),
-      carrier,
-      extractor: c2.extractor,
-      // Trusted device identity (§5): the daemon runs on an enrolled device with
-      // a signing key, so it can attribute the DEVICE for every request it sees.
-      // This is a real, verifiable signal — unlike the User-Agent, which is only
-      // used for the evidence label. It does NOT identify the human at the
-      // keyboard; a rule scoped to a user or group stays DEGRADED (see the
-      // capability self-description) until an enterprise IdP is connected.
-      device_id: cfg.device_id,
-      // Arrays stringify to a comma-joined list, so `contains` works on them
-      // in a rule condition without any special-casing in the engine.
-      content_kinds: r.classification.kinds,
-      findings: r.classification.findings.map((f) => f.label),
-      filenames: r.classification.filenames,
-      bytes: r.classification.bytes,
-      has_file_upload: r.classification.hasFileUpload,
-      uninspected: r.uninspected,
-    },
-  };
-
-  let d = evaluate(call, rules);
-  let matched = d.matched_rule_id ? cached.rules.find((x) => x.id === d.matched_rule_id) : undefined;
-
-  // ── FAIL-CLOSED INSPECTION GATE (§4) ──
-  // The body is in a format we could not fully read (a PDF, a generic archive,
-  // an over-limit payload, a body that refused bounded decompression). We must
-  // not let it ride an ALLOW just because our finding set came back empty. Ask
-  // the ONE engine a worst-case question: IF this body contained every class we
-  // know about, would any protection fire? If yes, we cannot clear it — block.
-  // If no protection would ever apply to this destination, allowing it is
-  // consistent with policy, so an uninspectable body is not punished needlessly.
-  let failClosed = false;
-  if (!r.classification.inspectable) {
-    // Worst case = every registry type present, in bulk, at high confidence,
-    // on the uploaded/uninspectable carrier. If ANY protection would fire for
-    // this destination, the unreadable body is blocked.
-    const worst = evaluate(
-      { ...call, tool_input: { ...call.tool_input, content_kinds: RUNTIME_CONTENT_KINDS, findings: RUNTIME_FINDING_LABELS, has_file_upload: true,
-        findings_v2: [...dataTypes().ids().map((t) => ({ type: t, count: 1_000_000, confidence: "high" })), ...c2.typed.map((f) => ({ type: f.type, count: f.count, confidence: f.confidence }))],
-        finding_types: dataTypes().ids(), carrier: "uninspectable" } },
-      rules,
-    );
-    if (worst.effect === "block" || worst.effect === "review" || worst.effect === "constrain") {
-      failClosed = true;
-      d = { ...worst, effect: "block" };
-      matched = worst.matched_rule_id ? cached.rules.find((x) => x.id === worst.matched_rule_id) : undefined;
-    }
-  }
+  const { call, decision: d, matched, failClosed, dest } = judgeEgress(cached.rules, r, agent, tenantDestinations(), cfg.device_id);
+  void call;
 
   const detected = describeClassification(r.classification);
   const baseReason = failClosed
@@ -336,7 +344,7 @@ function decideEgress(
     rule_id: matched?.id ?? null,
     degraded: !cached.fresh,
     pulled_at: cached.pulled_at,
-    evidence: buildEvidence(r, dest.class, dest.service, matched, d.effect, failClosed, c2.inspectable ? undefined : (worstCauseOf(r) )),
+    evidence: buildEvidence(r, dest.class, dest.service, matched, d.effect, failClosed, r.classification.inspectable ? undefined : worstCauseOf(r)),
   };
 
   // Attribution for the evidence trail — never an input to the decision above.

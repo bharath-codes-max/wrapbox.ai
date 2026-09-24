@@ -11,6 +11,11 @@
     "resolveJsonModule": true,
     "declaration": true
   },
-  "include": ["src"],
-  "exclude": ["src/selfcheck.ts"]
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "src/selfcheck.ts",
+    "src/tests/matrix.test.ts"
+  ]
 }

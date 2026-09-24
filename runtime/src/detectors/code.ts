@@ -38,7 +38,7 @@
  * WHAT IS EMITTED (never a value, never a line of code):
  *   SOURCE_CODE               label "lang:<grammar>"   count 1
  *   SOURCE_CODE.IAC           label "iac:<flavour>"    terraform, kubernetes, cloudformation, helm
- *   SOURCE_CODE.BUILD_CONFIG  label "config:<kind>"    json/yaml/toml/ini and known package manifests
+ *   CONFIG.BUILD  label "config:<kind>"    json/yaml/toml/ini and known package manifests
  *   the same types with label "embedded" and count = number of embedded code
  *   blocks when code sits inside JSON string values or inside log lines
  *   (`fields` names the JSON keys it sat under — key names, not values).
@@ -444,7 +444,7 @@ const MANIFEST_NAMES = new Set([
 ]);
 const CONFIG_EXT: Record<string, string> = { json: "json", json5: "json", yml: "yaml", yaml: "yaml", toml: "toml", ini: "ini", cfg: "ini", conf: "ini", properties: "ini", env: "ini", lock: "lockfile" };
 
-export type ConfigKind = { type: "SOURCE_CODE.IAC" | "SOURCE_CODE.BUILD_CONFIG"; label: string };
+export type ConfigKind = { type: "SOURCE_CODE.IAC" | "CONFIG.BUILD"; label: string };
 
 /** IaC first (a Kubernetes manifest is YAML but its policy meaning is infrastructure), then config formats. */
 export function classifyConfig(text: string, filename?: string, format?: string, json?: unknown): ConfigKind | null {
@@ -465,17 +465,17 @@ export function classifyConfig(text: string, filename?: string, format?: string,
   }
 
   // Package manifests and known config file names
-  if (MANIFEST_NAMES.has(base)) return { type: "SOURCE_CODE.BUILD_CONFIG", label: `config:manifest:${base}` };
-  if (/^dockerfile(\.|$)/.test(base) || (/^FROM\s+\S+/m.test(head) && /^(RUN|COPY|CMD|ENTRYPOINT|WORKDIR|EXPOSE)\b/m.test(head))) return { type: "SOURCE_CODE.BUILD_CONFIG", label: "config:manifest:dockerfile" };
-  if (ext && CONFIG_EXT[ext]) return { type: "SOURCE_CODE.BUILD_CONFIG", label: `config:${CONFIG_EXT[ext]}` };
-  if (format === "json" || format === "yaml" || format === "toml") return { type: "SOURCE_CODE.BUILD_CONFIG", label: `config:${format}` };
+  if (MANIFEST_NAMES.has(base)) return { type: "CONFIG.BUILD", label: `config:manifest:${base}` };
+  if (/^dockerfile(\.|$)/.test(base) || (/^FROM\s+\S+/m.test(head) && /^(RUN|COPY|CMD|ENTRYPOINT|WORKDIR|EXPOSE)\b/m.test(head))) return { type: "CONFIG.BUILD", label: "config:manifest:dockerfile" };
+  if (ext && CONFIG_EXT[ext]) return { type: "CONFIG.BUILD", label: `config:${CONFIG_EXT[ext]}` };
+  if (format === "json" || format === "yaml" || format === "toml") return { type: "CONFIG.BUILD", label: `config:${format}` };
 
   // Content shape when there is no name to go by
   const trimmed = head.trimStart();
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-    if (text.length <= MAX_PARSE_BYTES) { try { const v = JSON.parse(text); if (v && typeof v === "object") return { type: "SOURCE_CODE.BUILD_CONFIG", label: "config:json" }; } catch { /* not JSON */ } }
+    if (text.length <= MAX_PARSE_BYTES) { try { const v = JSON.parse(text); if (v && typeof v === "object") return { type: "CONFIG.BUILD", label: "config:json" }; } catch { /* not JSON */ } }
   }
-  if (json && typeof json === "object") return { type: "SOURCE_CODE.BUILD_CONFIG", label: "config:json" };
+  if (json && typeof json === "object") return { type: "CONFIG.BUILD", label: "config:json" };
   // Shape heuristics never run on a log: timestamped lines look like keys.
   const lines = head.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#"));
   if (lines.length >= 3 && !looksLikeLog(head)) {
@@ -484,10 +484,10 @@ export function classifyConfig(text: string, filename?: string, format?: string,
     if (tomlHeaders >= 1 && kvEq >= 2 && tomlHeaders + kvEq >= lines.length * 0.8) {
       // TOML values are typed (quoted strings, arrays, tables); INI values are bare words.
       const typed = lines.filter((l) => /^\s*[\w.\-]+\s*=\s*(\[|\{|"|'|\d|true|false)/.test(l)).length;
-      return { type: "SOURCE_CODE.BUILD_CONFIG", label: typed >= kvEq * 0.8 ? "config:toml" : "config:ini" };
+      return { type: "CONFIG.BUILD", label: typed >= kvEq * 0.8 ? "config:toml" : "config:ini" };
     }
     const yamlKeys = lines.filter((l) => /^\s*[A-Za-z_][\w.\-]*:\s*(\S.*)?$/.test(l) || /^\s*-\s+\S/.test(l)).length;
-    if (yamlKeys >= lines.length * 0.9 && !/[;{}]\s*$/m.test(head)) return { type: "SOURCE_CODE.BUILD_CONFIG", label: "config:yaml" };
+    if (yamlKeys >= lines.length * 0.9 && !/[;{}]\s*$/m.test(head)) return { type: "CONFIG.BUILD", label: "config:yaml" };
   }
   return null;
 }

@@ -43,7 +43,7 @@ export const BUILTIN_DETECTORS = [
     { id: "wrapbox.credential_file", version: "1.1.0", family: "pattern", label: "Credential files by name", locality: "device", cost: "cheap", inputs: ["metadata"],
         emits: [{ type: "CREDENTIAL.CREDENTIAL_FILE", confidence: "high" }] },
     { id: "wrapbox.code.treesitter", version: "1.0.0", family: "code", label: "Source code (syntax-aware)", locality: "device", cost: "moderate", inputs: ["text", "code"],
-        emits: [{ type: "SOURCE_CODE", confidence: "high" }, { type: "SOURCE_CODE.IAC", confidence: "medium" }, { type: "SOURCE_CODE.BUILD_CONFIG", confidence: "medium" }], provenance: { source: "tree-sitter + tree-sitter-wasms", license: "MIT" } },
+        emits: [{ type: "SOURCE_CODE", confidence: "high" }, { type: "SOURCE_CODE.IAC", confidence: "medium" }, { type: "CONFIG.BUILD", confidence: "medium" }, { type: "CONFIG.APP", confidence: "medium" }], provenance: { source: "tree-sitter + tree-sitter-wasms", license: "MIT" } },
     { id: "wrapbox.code.heuristic", version: "1.1.0", family: "code", label: "Source code (heuristic fallback)", locality: "device", cost: "cheap", inputs: ["text", "code"],
         emits: [{ type: "SOURCE_CODE", confidence: "medium" }] },
     { id: "wrapbox.financial", version: "1.1.0", family: "semantic", label: "Financial data (multi-signal)", locality: "device", cost: "cheap", inputs: ["text", "table"], emits: [{ type: "FINANCIAL", confidence: "medium" }, { type: "FINANCIAL.STATEMENT", confidence: "medium" }] },
