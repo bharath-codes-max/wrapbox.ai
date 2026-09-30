@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>io.wrapbox.wrapboxd</string>
+
+	<!-- node is named explicitly: tsx starts with "#!/usr/bin/env node" and
+	     launchd's PATH has no Homebrew, so relying on PATH would crash-loop.
+	     --inspect only. NEVER --protect-network here: the Network Extension
+	     replaces the system proxy, and both at once would double-route. -->
+	<key>ProgramArguments</key>
+	<array>
+		<string>/opt/homebrew/bin/node</string>
+		<string>/Users/bharathkumar/Music/wrapbox-prototype/runtime/node_modules/tsx/dist/cli.mjs</string>
+		<string>/Users/bharathkumar/Music/wrapbox-prototype/runtime/src/cli.ts</string>
+		<string>daemon</string>
+		<string>--inspect</string>
+	</array>
+
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>WRAPBOX_HOME</key>
+		<string>/Users/bharathkumar/Music/wrapbox-demo/state/device</string>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+
+	<key>WorkingDirectory</key>
+	<string>/Users/bharathkumar/Music/wrapbox-demo</string>
+
+	<!-- Start at login, and restart whenever it exits for any reason. -->
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<!-- Minimum seconds between restarts, so a crash loop cannot spin the CPU. -->
+	<key>ThrottleInterval</key>
+	<integer>5</integer>
+
+	<!-- Its OWN log file. launchd could not open the pre-existing daemon.log
+	     (exit 78 EX_CONFIG, reproduced) but creates a new file here fine. -->
+	<key>StandardOutPath</key>
+	<string>/Users/bharathkumar/Music/wrapbox-demo/state/wrapboxd.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/bharathkumar/Music/wrapbox-demo/state/wrapboxd.log</string>
+</dict>
+</plist>
