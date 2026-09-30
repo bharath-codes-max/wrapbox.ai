@@ -1,57 +1,37 @@
-# Wrapbox Real Prototype
+# Wrapbox prototype
 
-A completely isolated, high-fidelity **interactive product simulation** of the complete Wrapbox
-product described in the *8-Week Product, Security & Architecture Blueprint*. It exists to show
-what the finished product **is, does, and feels like** — for investor demos, enterprise customer
-demos, design-partner discussions and UX validation.
+Clickable prototype of Wrapbox — the runtime permit layer for AI agents. Every sensitive agent action is checked against one intent contract right before it runs and answered ALLOW, CONSTRAIN, REVIEW or BLOCK.
 
-> **This is not the real Wrapbox engineering implementation.** The real implementation
-> (Network Extension, wrapboxd, control plane, Core Brain work) lives in the parent repository and
-> is untouched by this project. This folder is its own git repository; its commits never mix into
-> the parent.
-
-## Run
+## Run it
 
 ```bash
 npm install
-npm run dev        # http://localhost:5980  (port chosen to never clash with the main app)
-npm test           # 15 engine outcome tests (node:test via tsx)
-npm run build      # type-check + production build
+npm run dev      # http://localhost:5173
+npm run build    # dist/wrapbox.html — a single self-contained page
 ```
 
-## What is real vs simulated
+## What's real and what's simulated
 
-**Real (live behavior):** the decision engine (Intent Contract clauses, Safety Kernel precedence,
-Blast-Radius Governor, Context Engine, Task Envelope), all state transitions (approve/deny/constrain,
-park/resume, break-glass expiry), transformations (payloads genuinely change; reversible tokens
-genuinely appear in the Token Vault), every dashboard counter (derived from the event store),
-policy changes genuinely changing outcomes, per-event evidence chains with linked hashes.
+- **Real:** the deterministic policy engine (`src/lib/engine.ts`), the YAML contract parser and validator (`src/data/contract.ts`), permit signing and verification with ECDSA P-256 in the browser (`src/lib/permit.ts`), passkey-style approval signatures, and each vendor's documented hook/request/response format (`src/data/scenarios.ts`, matching `hooks/intentos-hook.mjs`).
+- **Simulated:** the agents themselves, background traffic, SSO, MDM, Slack and directory sync.
 
-**Simulated (representative):** every integration — GitHub, SQL, AWS, MCP, SSO, macOS Endpoint
-Security, the Network Extension — plus detector/OCR/semantic analysis results, the fictional
-Veridian Systems organization, and evidence signing (illustrative hash chain, not cryptography).
+## Signing in
 
-## Architecture
+The app opens on a public landing page (`#/landing`). **Sign in** or **Get started** lead to the auth screens: any email works, and the password is the prototype access code. Signed-out visitors are always sent to the landing page.
 
-```
-src/model/      types (one SimulationEvent for every surface), registries, org, seed contracts
-src/engine/     brain.ts (single decide() — safety kernel > contracts > blast radius > context
-                > envelope), scenarios.ts (structured scenario library), simulate.ts (event +
-                transform + evidence + pipeline builder)
-src/state/      store.ts — single source of truth, localStorage persistence, task engine
-src/ui/         design system kit, event detail drawer, filterable stream
-src/pages/      one file per product screen
-tests/          engine outcome tests (§59 of the build brief)
-```
+## Two workspaces
 
-Adding a scenario = adding one structured entry to `src/engine/scenarios.ts`. No screen keeps its
-own copy of policy or events; a BLOCK in the Simulation Lab is the same event the Control Room,
-Live Actions, Agent Inventory, Review Center and Evidence render.
+- **Demo** — 30 days of traffic, 12 connected agents, a 14-version contract.
+- **Fresh** — completely empty. Everything on every page comes from what you do: admin setup, connecting agents, writing the contract, sending actions from the playground, employee setup, approvals. Saved in `localStorage`; reset it from the workspace menu.
 
-## Screens
+## Layout
 
-Control Room · Live Actions · Agents · Tasks (Task Envelope + park/resume) · Intent Studio
-(+ Policy Autopilot) · Safety Kernel · Policy Simulator (Shadow Mode) · Review Center (bundles) ·
-Standing Permissions · Break Glass · Coverage Map · Trust Graph · Evidence Explorer (+ causal
-graph) · Simulation Lab (Network / Endpoint / Gateway / Context / Safety, side-by-side reality
-view) · Integrations (+ Action Ontology) · Token Vault · Core Brain · Settings · guided Demo Mode.
+- `src/data/agents.ts` — the 8 platform categories and 25 integrations, with their real config snippets
+- `src/data/contract.ts` — rule model, policy packs, YAML emit/parse, replay
+- `src/data/scenarios.ts` — the scripted happy flows and each agent's native request/response adapter
+- `src/lib/engine.ts` — policy evaluation, safe rewrites (CONSTRAIN), command classification
+- `src/lib/store.ts` — workspace state (demo + fresh), live traffic, approvals
+- `src/pages/landing.tsx` — the public landing page (real app screenshots in `src/assets/shots/`, live policy-engine terminal, pricing)
+- `src/pages/auth.tsx` — log in and sign up
+- `src/pages/*` — Get started, onboarding, overview, agents, contract, playground, flows, approvals, evidence, team, gateway, settings
+- `src/assets/people/` — portraits (Unsplash License, see `CREDITS.md`)

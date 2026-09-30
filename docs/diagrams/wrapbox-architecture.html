@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Wrapbox — Runtime Authorization for AI Agents</title>
+<link rel="stylesheet" href="fonts/inline.css">
+<style>
+:root{
+  --ink:#0A0F1E;
+  --ink-2:#475569;
+  --ink-3:#8A97A8;
+  --line:#E4E9F0;
+  --line-2:#CBD5E1;
+  --surface:#FFFFFF;
+  --surface-2:#F7F9FC;
+  --surface-3:#EFF3F9;
+  --accent:#3B5BDB;
+  --accent-2:#E8EDFB;
+  --allow:#047857;
+  --allow-bg:#E7F5EF;
+  --review:#B45309;
+  --review-bg:#FDF3E3;
+  --block:#B91C1C;
+  --block-bg:#FBEAEA;
+  --sans:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#FFFFFF}
+body{
+  width:2400px;height:1466px;
+  font-family:var(--sans);
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:geometricPrecision;
+}
+.page{width:2400px;padding:64px 72px 56px}
+.wrap{width:2256px}
+
+/* ---------- type ---------- */
+h1{font-size:46px;font-weight:700;letter-spacing:-0.032em;line-height:1.06;color:var(--ink)}
+.thesis{margin-top:16px;font-size:19px;font-weight:400;letter-spacing:-0.005em;line-height:1.5;color:var(--ink-2);max-width:1160px;text-wrap:balance}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.10em;text-transform:uppercase;color:var(--ink-3);line-height:1.4}
+.nb{white-space:nowrap}
+.mono{font-family:var(--mono);font-size:12.5px;font-weight:500;color:var(--ink);letter-spacing:-0.01em}
+
+/* ---------- masthead ---------- */
+.masthead{display:flex;justify-content:space-between;align-items:flex-start;gap:80px}
+.masthead .eyebrow{padding-top:10px;white-space:nowrap}
+.hairline{height:1px;background:var(--line);margin-top:40px}
+
+/* ---------- cards ---------- */
+.card{border-radius:14px;border:1px solid var(--line);background:var(--surface);padding:26px}
+.elev{box-shadow:0 1px 2px rgba(10,15,30,.04),0 12px 32px -16px rgba(10,15,30,.10)}
+.c-title{font-size:19px;font-weight:600;letter-spacing:-0.015em;color:var(--ink);line-height:1.26}
+.c-body{font-size:14px;font-weight:400;line-height:1.55;color:var(--ink-2);max-width:31em}
+.s-title{font-size:14px;font-weight:600;letter-spacing:-0.01em;color:var(--ink);line-height:1.3}
+.s-desc{font-size:13.5px;font-weight:400;line-height:1.45;color:var(--ink-2);margin-top:4px}
+
+/* ---------- step numbers (shared with userflow) ---------- */
+.numrow{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.num{font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.02em;color:var(--ink-3)}
+.numrule{flex:1;height:1px;background:var(--line)}
+
+/* ---------- pills ---------- */
+.pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:999px;
+  font-size:11.5px;font-weight:600;letter-spacing:.04em;white-space:nowrap}
+.pill i{width:7px;height:7px;border-radius:999px;display:block;flex:none}
+.pill.ship{background:var(--allow-bg);color:var(--allow)}
+.pill.ship i{background:var(--allow)}
+.pill.build{background:var(--accent-2);color:var(--accent)}
+.pill.build i{background:var(--accent)}
+.pill.pend{background:var(--surface-3);color:var(--ink-3)}
+.pill.pend i{background:transparent;border:2px solid var(--ink-3)}
+
+/* ---------- bullets ---------- */
+ul{list-style:none}
+li{position:relative;padding-left:16px;font-size:13.5px;line-height:1.5;color:var(--ink-2)}
+li::before{content:"";position:absolute;left:0;top:8px;width:5px;height:5px;border-radius:999px;background:var(--line-2)}
+li+li{margin-top:9px}
+
+/* ---------- tier heads ---------- */
+.tier-head{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+.tier-head .bar{height:1px;background:var(--line);flex:1}
+
+/* ---------- tier 1 ---------- */
+.t1{margin-top:44px}
+.row4{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;align-items:stretch}
+.t1 .c-body{margin-top:9px}
+
+/* ---------- tier 2 (transport) + tier 3, one positioned block ---------- */
+.t23{position:relative;margin-top:44px}
+.trule{position:relative;height:1px;background:var(--line)}
+.tstate{position:absolute;left:50%;top:.5px;transform:translate(-50%,-50%);z-index:3;
+  background:var(--surface);padding:5px 14px;text-align:center;white-space:nowrap;
+  font-size:12.5px;font-weight:500;line-height:1.5;color:var(--ink-3)}
+.flows{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;height:116px}
+.flow{position:relative}
+.flow .lbl{position:absolute;left:50%;top:74px;transform:translate(-50%,-50%);z-index:3;
+  background:var(--surface);padding:5px 8px;text-align:center;white-space:nowrap}
+.flow .lab{font-size:12.5px;font-weight:500;color:var(--ink-3);line-height:1.4}
+.flow .sub{font-size:12.5px;font-weight:400;color:var(--ink-3);line-height:1.4;margin-top:2px}
+.shafts{position:absolute;left:0;top:0;width:2256px;height:150px;z-index:2;overflow:visible;display:block}
+
+.tier3{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;align-items:stretch}
+.col-l{grid-column:1/4;display:flex;flex-direction:column}
+.col-r{grid-column:4/5;display:flex;flex-direction:column}
+.col-l .card,.col-r .card{flex:1;display:flex;flex-direction:column}
+.tcap{margin-top:22px;font-size:14px;font-weight:400;line-height:1.55;color:var(--ink-2)}
+
+/* daemon */
+.dhead{display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:18px;border-bottom:1px solid var(--line)}
+.dname{font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-0.02em;color:var(--ink);line-height:1.2}
+.dsub{font-size:14px;line-height:1.55;color:var(--ink-2);margin-top:6px}
+.layers{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:18px;align-items:stretch}
+.layer{border-radius:10px;background:var(--surface-2);border:1px solid var(--line);padding:18px}
+.layer ul{margin-top:14px}
+.roadmap{margin-top:18px;display:flex;align-items:center;gap:14px;
+  border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:11px 18px}
+.roadmap .k{font-size:13.5px;font-weight:500;color:var(--ink);line-height:1.45}
+.roadmap .v{font-size:13.5px;font-weight:400;color:var(--ink-2);line-height:1.45}
+.svc{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}
+
+/* gateway */
+.ghead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding-bottom:18px;border-bottom:1px solid var(--line)}
+.gstack{display:flex;flex-direction:column;gap:18px;margin-top:18px;flex:1}
+.grp .eyebrow{margin-bottom:8px}
+.gline{font-size:13.5px;font-weight:500;line-height:1.5;color:var(--ink-2)}
+.gtxt{font-size:13.5px;font-weight:400;line-height:1.5;color:var(--ink-2)}
+.gnote{margin-top:auto;border-radius:10px;background:var(--surface-3);border:1px solid var(--line);padding:18px;
+  font-size:13.5px;line-height:1.5;color:var(--ink-2)}
+
+/* ---------- footer ---------- */
+.foot{margin-top:44px}
+.foot .hr{height:1px;background:var(--line)}
+.inv{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;margin-top:28px}
+.inv .t{font-size:14px;font-weight:600;letter-spacing:-0.01em;color:var(--ink);line-height:1.3}
+.inv .b{font-size:13.5px;line-height:1.5;color:var(--ink-2);margin-top:8px;max-width:30em}
+.legend{display:flex;align-items:center;justify-content:space-between;margin-top:34px}
+.legend .pills{display:flex;align-items:center;gap:12px}
+.legend .note{font-size:12.5px;font-weight:500;color:var(--ink-3);margin-left:6px}
+.brand{font-size:12.5px;font-weight:400;color:var(--ink-3);letter-spacing:0;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="page"><div class="wrap">
+
+  <!-- ================= MASTHEAD ================= -->
+  <div class="masthead">
+    <div>
+      <h1>Wrapbox — Runtime Authorization for AI Agents</h1>
+      <p class="thesis">Every action an AI agent takes on a managed device is evaluated against one policy, enforced at the <span class="nb">operating-system</span> boundary, and recorded as a signed, <span class="nb">tamper-evident</span> receipt.</p>
+    </div>
+    <div class="eyebrow">Architecture</div>
+  </div>
+  <div class="hairline"></div>
+
+  <!-- ================= TIER 1 ================= -->
+  <section class="t1">
+    <div class="tier-head"><div class="eyebrow">Control Plane · Your Tenant</div><div class="bar"></div></div>
+    <div class="row4">
+      <div class="card">
+        <div class="numrow"><span class="num">01</span><span class="numrule"></span></div>
+        <div class="c-title">Policy Authority</div>
+        <div class="c-body">One normalized rule set for every agent vendor. Priority-ordered, first match wins, deny by default.</div>
+      </div>
+      <div class="card">
+        <div class="numrow"><span class="num">02</span><span class="numrule"></span></div>
+        <div class="c-title">Device Registry</div>
+        <div class="c-body">Single-use enrollment tokens. Each device generates its own <span class="mono">ECDSA P-256</span> key and is pinned to it.</div>
+      </div>
+      <div class="card">
+        <div class="numrow"><span class="num">03</span><span class="numrule"></span></div>
+        <div class="c-title">Evidence Ledger</div>
+        <div class="c-body">Hash-chained receipts per device. An independent verify endpoint re-walks the chain for auditors.</div>
+      </div>
+      <div class="card">
+        <div class="numrow"><span class="num">04</span><span class="numrule"></span></div>
+        <div class="c-title">Admin Console</div>
+        <div class="c-body">Fleet state, live decisions, agent inventory, contract authoring, evidence export.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= TIER 2 · TRANSPORT  +  TIER 3 ================= -->
+  <section class="t23">
+
+    <!-- the transport rule: one bus, every flow crosses it -->
+    <div class="trule">
+      <div class="tstate">Agent-initiated outbound <span class="mono">TLS 443</span> only —<br>no inbound ports, no listening service on the device.</div>
+    </div>
+
+    <!-- four shafts on the tier-1 grid; column centres 273.75 / 843.25 / 1412.75 / 1982.25 -->
+    <svg class="shafts" viewBox="0 0 2256 150" fill="none" stroke="#CBD5E1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <!-- White halo painted first: the tier-3 eyebrow rules pass behind the
+           shafts, so the horizontal breaks rather than forming a cross. Same
+           "line breaks behind" convention the labels use. -->
+      <g stroke="#FFFFFF" stroke-width="9">
+        <path d="M273.75 0.5 V149.8"/><path d="M843.25 0.5 V149.8"/>
+        <path d="M1412.75 0.5 V149.8"/><path d="M1982.25 0.5 V149.8"/>
+      </g>
+      <!-- 01 policy bundle: control plane → endpoint -->
+      <path d="M273.75 0.5 V149.8"/><path d="M270.25 142.8 L273.75 149.8 L277.25 142.8"/>
+      <!-- 02 heartbeat: endpoint → device registry -->
+      <path d="M843.25 149.8 V0.5"/><path d="M839.75 7.5 L843.25 0.5 L846.75 7.5"/>
+      <!-- 03 receipts: endpoint → evidence ledger -->
+      <path d="M1412.75 149.8 V0.5"/><path d="M1409.25 7.5 L1412.75 0.5 L1416.25 7.5"/>
+      <!-- 04 bundle down, receipts up: control plane ↔ gateway -->
+      <path d="M1982.25 0.5 V149.8"/><path d="M1978.75 7.5 L1982.25 0.5 L1985.75 7.5"/><path d="M1978.75 142.8 L1982.25 149.8 L1985.75 142.8"/>
+    </svg>
+
+    <div class="flows">
+      <div class="flow"><div class="lbl"><div class="lab">Signed policy bundle</div><div class="sub">Pulled every 60s</div></div></div>
+      <div class="flow"><div class="lbl"><div class="lab">Heartbeat</div><div class="sub">Every 30s, carries policy version + chain head</div></div></div>
+      <div class="flow"><div class="lbl"><div class="lab">Signed receipts</div><div class="sub">Batched, asynchronous, never on the decision path</div></div></div>
+      <div class="flow"><div class="lbl"><div class="lab">Policy bundle · Receipts</div><div class="sub">Same rule set, same chain</div></div></div>
+    </div>
+
+    <div class="tier3">
+
+      <!-- ---- endpoint runtime ---- -->
+      <div class="col-l">
+        <div class="tier-head"><div class="eyebrow">Endpoint Runtime</div><div class="bar"></div></div>
+        <div class="card elev">
+          <div class="dhead">
+            <div>
+              <div class="dname">wrapboxd</div>
+              <div class="dsub">One install on every managed Mac, nothing per agent.</div>
+            </div>
+            <div class="eyebrow" style="padding-bottom:4px">One daemon · Three enforcement points</div>
+          </div>
+
+          <div class="layers">
+            <div class="layer">
+              <div class="numrow"><span class="num">01</span><span class="numrule"></span></div>
+              <div class="s-title">Kernel Floor</div>
+              <div class="s-desc">macOS Seatbelt confinement</div>
+              <ul>
+                <li>File and network denials at the syscall boundary</li>
+                <li>Inherited by every child process the agent spawns</li>
+                <li>The confined process cannot lift its own confinement</li>
+                <li>Symlinks, copies and alternate runtimes are refused alike</li>
+              </ul>
+            </div>
+            <div class="layer">
+              <div class="numrow"><span class="num">02</span><span class="numrule"></span></div>
+              <div class="s-title">Policy Ceiling</div>
+              <div class="s-desc">Agent-native interception</div>
+              <ul>
+                <li><span class="mono">PreToolUse</span> interception inside the agent itself</li>
+                <li>Decided from the local signed cache in single-digit milliseconds</li>
+                <li>The decision path never touches the network</li>
+                <li>Fails closed: if the daemon is gone, the action is refused</li>
+              </ul>
+            </div>
+            <div class="layer">
+              <div class="numrow"><span class="num">03</span><span class="numrule"></span></div>
+              <div class="s-title">Network Gate</div>
+              <div class="s-desc">System-wide egress proxy</div>
+              <ul>
+                <li>Every browser and application, with no per-app configuration</li>
+                <li>Allow or deny by destination; <span class="mono">CONNECT</span> inspected, TLS never intercepted</li>
+                <li>An unattributed process reaching a model API raises its own alarm</li>
+                <li>Loopback and link-local traffic bypass the gate by design</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="roadmap">
+            <span class="pill pend"><i></i>Pending Apple entitlement</span>
+            <span class="k">Kernel Floor roadmap</span>
+            <span class="v">Endpoint Security system extension → fleet-wide visibility of every process launch</span>
+          </div>
+
+          <div class="svc">
+            <div>
+              <div class="s-title">Agent Discovery</div>
+              <div class="s-desc">Inventories every installed agent, reports to the Control Plane.</div>
+            </div>
+            <div>
+              <div class="s-title">Tamper Watch</div>
+              <div class="s-desc">Agent config and shim integrity, restored and receipted on drift.</div>
+            </div>
+            <div>
+              <div class="s-title">Offline Spool</div>
+              <div class="s-desc">Signed receipts queue locally and sync when the device reconnects.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---- gateway ---- -->
+      <div class="col-r">
+        <div class="tier-head"><div class="eyebrow">Gateway · Data Plane</div><div class="bar"></div></div>
+        <div class="card">
+          <div class="ghead">
+            <div>
+              <div class="c-title">Gateway</div>
+              <div class="c-body" style="margin-top:8px">Governs agents that never touch a managed device.</div>
+            </div>
+            <span class="pill build" style="flex:none;margin-top:2px"><i></i>In build</span>
+          </div>
+
+          <div class="gstack">
+            <div class="grp">
+              <div class="eyebrow">Sits in front of</div>
+              <div class="gline">Databases<br>Internal APIs<br>MCP servers</div>
+            </div>
+            <div class="grp">
+              <div class="eyebrow">Agents governed</div>
+              <div class="gline">Browser AI<br>Cloud CI agents<br>SaaS agents</div>
+            </div>
+            <div class="grp">
+              <div class="eyebrow">Credential brokering</div>
+              <div class="gtxt">Agents receive scoped, short-lived access, never long-lived keys.</div>
+            </div>
+            <div class="gnote">Same policy engine and the same receipt format as the endpoint — one rule set, one chain, two enforcement surfaces.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="tcap">The endpoint governs the device. The gateway governs the data. Together they cover an agent wherever it runs.</p>
+  </section>
+
+  <!-- ================= FOOTER ================= -->
+  <div class="foot">
+    <div class="hr"></div>
+    <div class="inv">
+      <div>
+        <div class="t">Fail-closed</div>
+        <div class="b">No matching rule denies. Loss of policy denies. Absence of an answer is never an answer.</div>
+      </div>
+      <div>
+        <div class="t">Local decisions</div>
+        <div class="b">Enforcement never waits on the network. A severed link restricts the agent; it does not free it.</div>
+      </div>
+      <div>
+        <div class="t">One engine</div>
+        <div class="b">Control plane, endpoint and gateway evaluate byte-identical rules. No screen can contradict another.</div>
+      </div>
+      <div>
+        <div class="t">Tamper-evident</div>
+        <div class="b"><span class="mono">ECDSA P-256</span>, hash-chained per device. Deletion, edits and forks each surface as distinct, named alarms.</div>
+      </div>
+    </div>
+    <div class="legend">
+      <div class="pills">
+        <span class="pill ship"><i></i>Shipping</span>
+        <span class="pill build"><i></i>In build</span>
+        <span class="pill pend"><i></i>Pending Apple entitlement</span>
+        <span class="note">Unpilled blocks are shipping.</span>
+      </div>
+      <div class="brand">Wrapbox · Runtime Authorization for AI Agents</div>
+    </div>
+  </div>
+
+</div></div>
+</body>
+</html>

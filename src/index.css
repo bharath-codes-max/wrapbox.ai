@@ -1,0 +1,510 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ---------- Tokens: light palette is the base ---------- */
+:root {
+  --bg: #fafaf8;
+  --surface: #ffffff;
+  --surface-2: #f4f4f1;
+  --surface-3: #ebebe7;
+  --line: #e6e5e0;
+  --line-strong: #d3d2cc;
+  --fg: #111c35;
+  --fg-2: #4a5061;
+  --fg-3: #8a8e99;
+  --accent: #1848ff;
+  --accent-2: #5a82ff;
+  --accent-soft: #f0f2f8;
+  --accent-fg: #ffffff;
+  --ink: #111c35;
+  --ink-fg: #ffffff;
+  --nav: #0f1b35;
+  --nav-line: rgba(255, 255, 255, 0.08);
+  --allow: #0a8a5c;
+  --allow-soft: #e9f5ee;
+  --constrain: #6b45e0;
+  --constrain-soft: #f1ecfd;
+  --review: #b26500;
+  --review-soft: #fbf2e1;
+  --block: #d6224a;
+  --block-soft: #fcecee;
+  --code-bg: #0f1628;
+  --code-line: #1e2740;
+  --shadow: 0 1px 2px rgba(17, 28, 53, 0.04), 0 8px 24px -12px rgba(17, 28, 53, 0.12);
+  --shadow-lg: 0 24px 60px -24px rgba(17, 28, 53, 0.35);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #080c17;
+    --surface: #0e1424;
+    --surface-2: #141b2e;
+    --surface-3: #1b2338;
+    --line: #1e273d;
+    --line-strong: #2b3652;
+    --fg: #e8ecf5;
+    --fg-2: #a3acc2;
+    --fg-3: #6c7590;
+    --accent: #7c98ff;
+    --accent-2: #9db4ff;
+    --accent-soft: #161f3a;
+    --accent-fg: #080c17;
+    --ink: #e8ecf5;
+    --ink-fg: #111c35;
+    --nav: #0b1326;
+    --nav-line: rgba(255, 255, 255, 0.07);
+    --allow: #3fd49b;
+    --allow-soft: #0d271e;
+    --constrain: #a78bff;
+    --constrain-soft: #221a3f;
+    --review: #f4b453;
+    --review-soft: #2c2010;
+    --block: #ff6e8a;
+    --block-soft: #321219;
+    --code-bg: #060a14;
+    --code-line: #161e33;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+    --shadow-lg: 0 24px 60px -24px rgba(0, 0, 0, 0.8);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+--bg: #080c17;
+  --surface: #0e1424;
+  --surface-2: #141b2e;
+  --surface-3: #1b2338;
+  --line: #1e273d;
+  --line-strong: #2b3652;
+  --fg: #e8ecf5;
+  --fg-2: #a3acc2;
+  --fg-3: #6c7590;
+  --accent: #7c98ff;
+  --accent-2: #9db4ff;
+  --accent-soft: #161f3a;
+  --accent-fg: #080c17;
+  --ink: #e8ecf5;
+  --ink-fg: #111c35;
+  --nav: #0b1326;
+  --nav-line: rgba(255, 255, 255, 0.07);
+  --allow: #3fd49b;
+  --allow-soft: #0d271e;
+  --constrain: #a78bff;
+  --constrain-soft: #221a3f;
+  --review: #f4b453;
+  --review-soft: #2c2010;
+  --block: #ff6e8a;
+  --block-soft: #321219;
+  --code-bg: #060a14;
+  --code-line: #161e33;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 24px 60px -24px rgba(0, 0, 0, 0.8);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-fg: var(--accent-fg);
+  --color-ink: var(--ink);
+  --color-ink-fg: var(--ink-fg);
+  --color-allow: var(--allow);
+  --color-allow-soft: var(--allow-soft);
+  --color-constrain: var(--constrain);
+  --color-constrain-soft: var(--constrain-soft);
+  --color-nav: var(--nav);
+  --color-review: var(--review);
+  --color-review-soft: var(--review-soft);
+  --color-block: var(--block);
+  --color-block-soft: var(--block-soft);
+  --color-code: var(--code-bg);
+  --color-code-line: var(--code-line);
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-brand: "IBM Plex Sans", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --shadow-card: var(--shadow);
+  --shadow-float: var(--shadow-lg);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
+}
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+  letter-spacing: -0.02em;
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--fg-3);
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+::selection {
+  background: color-mix(in oklab, var(--accent) 25%, transparent);
+}
+
+/* Scrollbars */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+/* Brand gradient (from the Wrapbox mark) */
+.brand-grad {
+  background: linear-gradient(135deg, #9db4ff 0%, #5a82ff 55%, #1848ff 100%);
+}
+.brand-text {
+  background: linear-gradient(120deg, var(--accent-2) 0%, var(--accent) 70%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* The permit: a signed ticket with a perforated stub */
+.perforation {
+  background-image: radial-gradient(circle at 50% 50%, var(--bg) 5px, transparent 5.5px);
+  background-size: 14px 14px;
+  background-repeat: repeat-x;
+  height: 14px;
+}
+
+/* Flowing packets along the agent → wrapbox → resource rails */
+@keyframes travel {
+  from {
+    transform: translateX(-10%);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  to {
+    transform: translateX(1000%);
+    opacity: 0;
+  }
+}
+.packet {
+  animation: travel 2.6s cubic-bezier(0.5, 0, 0.3, 1) infinite;
+}
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--allow) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+.live-dot {
+  animation: pulse-ring 1.8s infinite;
+}
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+.shimmer {
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent) 18%, transparent), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.caret::after {
+  content: "▋";
+  margin-left: 2px;
+  animation: blink 1s steps(1) infinite;
+}
+
+/* Top bar: two styles, switched from the bar itself. Matte black is the default. */
+.wb-nav {
+  --n-bg:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #161618 0%, #111113 60%, #0d0d0f 100%);
+  --n-fg: #ffffff;
+  --n-fg-2: rgba(255, 255, 255, 0.72);
+  --n-fg-3: rgba(255, 255, 255, 0.5);
+  --n-soft: rgba(255, 255, 255, 0.07);
+  --n-soft-2: rgba(255, 255, 255, 0.12);
+  --n-ring: rgba(255, 255, 255, 0.12);
+  --n-ring-2: rgba(255, 255, 255, 0.22);
+  --n-edge: rgba(255, 255, 255, 0.08);
+  --n-glow: rgba(255, 255, 255, 0.1);
+  --n-pill-bg: #ffffff;
+  --n-pill-fg: #111113;
+  --n-ok-bg: rgba(63, 212, 155, 0.1);
+  --n-ok-ring: rgba(63, 212, 155, 0.25);
+  --n-ok-fg: #b6f0d6;
+  --n-ok-dot: #3fd49b;
+  --n-bad-fg: #ff8fa3;
+  --n-shadow: none;
+  background: var(--n-bg);
+  color: var(--n-fg);
+  box-shadow: var(--n-shadow);
+}
+.wb-nav[data-nav="light"] {
+  --n-bg: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
+  --n-fg: var(--fg);
+  --n-fg-2: color-mix(in oklab, var(--fg) 72%, transparent);
+  --n-fg-3: color-mix(in oklab, var(--fg) 50%, transparent);
+  --n-soft: color-mix(in oklab, var(--fg) 4%, transparent);
+  --n-soft-2: color-mix(in oklab, var(--fg) 8%, transparent);
+  --n-ring: color-mix(in oklab, var(--fg) 11%, transparent);
+  --n-ring-2: color-mix(in oklab, var(--fg) 22%, transparent);
+  --n-edge: var(--line);
+  --n-glow: transparent;
+  --n-pill-bg: var(--fg);
+  --n-pill-fg: var(--bg);
+  --n-ok-bg: color-mix(in oklab, var(--allow) 9%, transparent);
+  --n-ok-ring: color-mix(in oklab, var(--allow) 28%, transparent);
+  --n-ok-fg: var(--allow);
+  --n-ok-dot: var(--allow);
+  --n-bad-fg: var(--block);
+  --n-shadow: 0 10px 28px -22px rgba(17, 28, 53, 0.45);
+}
+
+/* Get started hero: ribbed-glass prism — coral → pink → violet, deep teal pooling bottom-right */
+.hero-prism {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(62% 95% at 80% 112%, rgba(9, 34, 46, 0.97) 0%, rgba(9, 34, 46, 0.7) 40%, transparent 76%),
+    radial-gradient(30% 60% at 52% -10%, rgba(255, 236, 246, 0.42), transparent 72%),
+    linear-gradient(90deg, #ec4a22 0%, #ff6a3d 16%, #ff8580 32%, #ff9fcf 50%, #d69bff 64%, #9a82f7 80%, #6d66e6 100%);
+  background-size: 100% 100%, 100% 100%, 130% 100%;
+  animation: prism-drift 18s ease-in-out infinite alternate;
+}
+.hero-prism::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.2) 0px,
+    rgba(255, 255, 255, 0.04) 3px,
+    rgba(20, 8, 40, 0.1) 8px,
+    rgba(255, 255, 255, 0.12) 11px
+  );
+  mix-blend-mode: soft-light;
+}
+.hero-prism::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(150, 24, 40, 0.16) 0%, rgba(150, 24, 40, 0.06) 36%, transparent 55%);
+}
+@keyframes prism-drift {
+  from {
+    background-position: 0 0, 0 0, 0% 0;
+  }
+  to {
+    background-position: 0 0, 0 0, 100% 0;
+  }
+}
+.prism-swatch {
+  background: linear-gradient(120deg, #ff6a3d, #ff9fcf 50%, #9a82f7);
+}
+
+/* Fresh-workspace strip: the same prism as the Get started hero, washed back so it can sit
+   above every page and still let the text read — full saturation kept on the hairline. */
+.fresh-bar {
+  position: relative;
+  color: var(--fg);
+  background:
+    linear-gradient(
+      90deg,
+      rgba(236, 74, 34, 0.17) 0%,
+      rgba(255, 106, 61, 0.17) 16%,
+      rgba(255, 133, 128, 0.17) 32%,
+      rgba(255, 159, 207, 0.19) 50%,
+      rgba(214, 155, 255, 0.19) 64%,
+      rgba(154, 130, 247, 0.19) 80%,
+      rgba(109, 102, 230, 0.19) 100%
+    ),
+    var(--surface);
+}
+.fresh-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #ec4a22 0%, #ff6a3d 16%, #ff8580 32%, #ff9fcf 50%, #d69bff 64%, #9a82f7 80%, #6d66e6 100%);
+}
+
+/* Cards ease in on load (staggered by position) and lift slightly on hover */
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.995);
+  }
+}
+.wb-card {
+  animation: card-in 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  transition:
+    transform 0.28s cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 0.28s,
+    border-color 0.28s;
+}
+.wb-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+  border-color: var(--line-strong);
+}
+.wb-card:nth-child(2) { animation-delay: 0.05s; }
+.wb-card:nth-child(3) { animation-delay: 0.1s; }
+.wb-card:nth-child(4) { animation-delay: 0.15s; }
+.wb-card:nth-child(5) { animation-delay: 0.2s; }
+.wb-card:nth-child(6) { animation-delay: 0.25s; }
+.wb-card:nth-child(n + 7) { animation-delay: 0.3s; }
+
+/* Scroll parallax inside the app: --sy is the main scroll offset, set by the shell */
+.parallax-head {
+  transform: translate3d(0, calc(var(--sy, 0) * -0.08px), 0);
+  opacity: max(0.25, calc(1 - var(--sy, 0) * 0.0016));
+  will-change: transform, opacity;
+}
+/* Pitch stages: the same mouse parallax in container units, so the drift is
+   identical whatever size the stage is rendered at. */
+.par {
+  transform: translate3d(calc(var(--mx, 0) * var(--depth, 6) * 0.1cqw), calc(var(--my, 0) * var(--depth, 6) * 0.08cqw), 0);
+  transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+  will-change: transform;
+}
+
+/* Mouse parallax: --mx/--my run -1..1 across the hovered element */
+.parallax-mouse {
+  transform: translate3d(calc(var(--mx, 0) * var(--depth, 10) * 1px), calc(var(--my, 0) * var(--depth, 10) * 0.8px), 0);
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee {
+  animation: marquee 44s linear infinite;
+}
+.marquee-wrap:hover .marquee {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .packet,
+  .live-dot,
+  .shimmer,
+  .caret::after,
+  .hero-prism,
+  .wb-card,
+  .marquee {
+    animation: none;
+  }
+  .wb-card,
+  .wb-card:hover,
+  .parallax-head,
+  .parallax-mouse,
+  .par {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Wrapbox mark: seal and tick draw on, the tick re-verifies every few seconds */
+@keyframes wb-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes wb-tick-loop {
+  0%,
+  8% {
+    stroke-dashoffset: 26;
+  }
+  22%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes wb-nudge {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+}
+.wb-seal {
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: wb-draw 0.7s ease 0.35s forwards;
+}
+.wb-tick {
+  stroke-dasharray: 26;
+  stroke-dashoffset: 26;
+  animation: wb-tick-loop 6s cubic-bezier(0.6, 0, 0.2, 1) 0.75s infinite;
+}
+.wb-box {
+  transform-origin: 20px 20px;
+  transform-box: view-box;
+}
+.wb-logo:hover .wb-box {
+  animation: wb-nudge 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb-seal,
+  .wb-tick {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .wb-logo:hover .wb-box {
+    animation: none;
+  }
+}
