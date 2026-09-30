@@ -1,0 +1,608 @@
+{
+  "generatedAt": "2026-09-25",
+  "cases": [
+    {
+      "id": "uc-intent",
+      "title": "Maya writes PHI policy in English. Wrapbox won't overclaim.",
+      "persona": {
+        "name": "Maya Chen",
+        "role": "Security Analyst",
+        "userId": "u-maya"
+      },
+      "why": "A HIPAA audit asks how PHI in scanned attachments is stopped before it reaches external AI.",
+      "pages": [
+        "Intent Studio",
+        "Coverage Map",
+        "Policy Simulator"
+      ],
+      "steps": [
+        {
+          "ui": "Click + Draft contract, type the rule in plain English",
+          "system": "Drafter drawer holds name + sourceText; nothing compiled yet (intent-studio.tsx)"
+        },
+        {
+          "ui": "Click Compile, read the clause preview",
+          "system": "draftClauses(text) splits sentences, extracts dataClasses, effect, transform, destinations, requiredCapabilities"
+        },
+        {
+          "ui": "Click Save as draft",
+          "system": "coverageRollup(preview) sets coverage; upsertContract() stores it as DRAFT v1"
+        },
+        {
+          "ui": "Open the contract card, inspect required skills",
+          "system": "contractCoverage() = worst capability status; UNINSPECTABLE 'Encrypted content' counts as PENDING"
+        },
+        {
+          "ui": "Click Activate",
+          "system": "Button disabled; setContractStatus(id,'ACTIVE') returns false because canActivate() is false"
+        }
+      ],
+      "codePath": [
+        "IntentStudio Compile → draftClauses(text)",
+        "coverageRollup(preview) → contractCoverage() → coverageOf(requiredCapabilities)",
+        "upsertContract({ status: 'DRAFT', coverage })",
+        "Activate → setContractStatus(id, 'ACTIVE') → canActivate()",
+        "brain.decide() reads only contracts where status === 'ACTIVE'"
+      ],
+      "snippet": {
+        "file": "src/state/store.ts",
+        "code": "/** Returns false (and changes nothing) when activation would be a false claim. */\nexport function setContractStatus(id: string, status: IntentContract[\"status\"]): boolean {\n  const target = state.contracts.find((c) => c.id === id);\n  if (!target) return false;\n  if (status === \"ACTIVE\" && !canActivate(target)) return false;\n  set({ contracts: state.contracts.map((c) => (c.id === id ? { ...c, status, coverage: contractCoverage(c) } : c)) });\n  return true;\n}"
+      },
+      "outcome": "The PHI contract exists as a DRAFT with honest PENDING coverage; it is not enforced and Wrapbox tells Maya exactly which skill is missing.",
+      "evidence": "Contract status/version/coverage live in the store: Intent Studio card + drawer, Coverage Map 'inactive' row (Draft — not switched on) and 'gap' row for Encrypted content; no evidence-chain event is written by drafting or activation.",
+      "scenarioId": "",
+      "realVsSimulated": "draftClauses() is a deterministic keyword/regex compiler standing in for the product's Policy IR; coverage rollup, the activation guard and decide() consuming only ACTIVE contracts are real logic over the static CAPABILITIES registry; new drafts are stamped author u-priya regardless of who is signed in."
+    },
+    {
+      "id": "uc-agent-block",
+      "title": "Claude Code reaches for .env. Daniel sees why it stopped.",
+      "persona": {
+        "name": "Daniel Kim",
+        "role": "Developer",
+        "userId": "u-daniel"
+      },
+      "why": "Claude Code, debugging a config issue on his laptop, runs `cat .env`; Daniel wants to know why it stopped.",
+      "pages": [
+        "Simulation Lab",
+        "Live Actions",
+        "Core Brain"
+      ],
+      "steps": [
+        {
+          "ui": "Opens Simulation Lab, Endpoint tab, picks \"Agent reads .env\", presses Run",
+          "system": "sim-lab start() calls store simulate(sc); the event is real and recorded"
+        },
+        {
+          "ui": "Watches the agent terminal reveal Bash(cat .env) stage by stage",
+          "system": "runScenario() builds ActionRequest (SECRET_ACCESS, CREDENTIAL.* findings via buildInspection); decide() matches cl-eng-2 → BLOCK"
+        },
+        {
+          "ui": "Reads \"Decision: BLOCK · Decided by …\" and \"Blocked before execution\"",
+          "system": "pipelineFor() emits stages; AgentTerminal linesFor() derives every line from the event"
+        },
+        {
+          "ui": "Opens Live Actions; the blocked row is newest",
+          "system": "store set() appended the event to s.events; LiveActions renders s.events through EventStream, metrics() counts BLOCK"
+        },
+        {
+          "ui": "Opens Core Brain to see which gate objected",
+          "system": "CoreBrainPage decided('contract') counts events by decidedBy.layer; \"Your rules\" gets the credit"
+        }
+      ],
+      "codePath": [
+        "SimLab start()",
+        "store simulate(sc)",
+        "runScenario(sc, state.contracts, state.lastHash, { breakGlass: bg, kernel: state.kernel, standing: state.standing })",
+        "buildInspection(sc)",
+        "decide(req, contracts)",
+        "clauseMatches(cl-eng-2, req, classes)",
+        "result.decidedBy = { layer: \"contract\", clauseId: \"cl-eng-2\" }",
+        "pipelineFor(sc, ev)",
+        "AgentTerminal linesFor()",
+        "CoreBrainPage decided(\"contract\")"
+      ],
+      "snippet": {
+        "file": "src/engine/brain.ts",
+        "code": "  const topClause = matched.find((m) => m.effect === contractDecision);\n  let decidedBy: DecidedBy = topClause\n    ? { layer: \"contract\", clauseId: topClause.clauseId, label: `\"${topClause.clauseText}\" (${topClause.contractName})` }\n    : { layer: \"default\", label: \"No rule restricts this action\" };\n\n  // 3. Safety Kernel.\n  const { enforced: safety, observed: safetyObserved } = kernelHits(kernelFacts(req), req.kernel ?? BASELINE_KERNEL, req.now ?? Date.now());\n  for (const s of safety) reasons.push(`Safety Kernel: ${s.name} — ${s.description}`);\n  for (const s of safetyObserved) reasons.push(`Safety Kernel (observing, not enforced yet): ${s.name} would have blocked this.`);\n\n  // 4. Combine per precedence: explicit forbid > safety invariant > constrain > review.\n  //    An explicit enterprise BLOCK keeps the credit when both apply.\n  let decision: Decision = contractDecision;"
+      },
+      "outcome": "The secret read never executes: decision BLOCK, status blocked, decidedBy \"Agents must not read local secrets files\" (Engineering guardrails), safer path offered.",
+      "evidence": "One SimulationEvent (evt-NNNNN) with chain User→Agent→Tool→Action→Resource→Findings→Rules matched→Decided by→Decision→Enforcement and a hash; shown in Simulation Lab terminal, Live Actions, Evidence, Core Brain, Control Room.",
+      "scenarioId": "ep-read-env",
+      "realVsSimulated": "The Claude Code session, the .env read and its CREDENTIAL findings are scripted scenario data (no file is read, no agent runs); clause matching, precedence, decidedBy, the hash chain and store propagation to every page are real code."
+    },
+    {
+      "id": "uc-review",
+      "title": "A force-push to main is parked. Alex decides in seconds.",
+      "persona": {
+        "name": "Alex Morgan",
+        "role": "Engineering Manager",
+        "userId": "u-alex"
+      },
+      "why": "Daniel's Claude Code ran `git push --force origin main` in production; the brain parked it as REVIEW.",
+      "pages": [
+        "Simulation Lab",
+        "Review Center",
+        "Evidence"
+      ],
+      "steps": [
+        {
+          "ui": "Daniel's agent fires the force-push (Simulation Lab / Tasks)",
+          "system": "store.simulate() → runScenario() → decide(); clause cl-eng-3 (WRITE, SOURCE_CODE, production) returns REVIEW"
+        },
+        {
+          "ui": "Event lands as pending with a 4-hour expiry",
+          "system": "runScenario() sets reviewState {status:'pending', expiresAt: ts+4h, safeAlternative} and status 'pending_review'"
+        },
+        {
+          "ui": "Alex opens Review Center → Awaiting your decision",
+          "system": "approverFor(e) routes to task approver or Engineering Manager, never e.user (requester)"
+        },
+        {
+          "ui": "Alex reads why, blast radius (31 files, 14 commits), safer alternative",
+          "system": "Card renders e.decisionReasons[0], e.blastRadius, e.safeAlternative from suggestAlternative(): feature branch + PR"
+        },
+        {
+          "ui": "Alex clicks Approve once / Approve scoped / Constrain / Deny",
+          "system": "resolveReview() stamps reviewer, decidedAt, scope; appends Review + Outcome to evidence chain once"
+        }
+      ],
+      "codePath": [
+        "store.simulate()",
+        "simulate.runScenario()",
+        "brain.decide()",
+        "clauseMatches(cl-eng-3)",
+        "store.approverFor()",
+        "store.resolveReview()",
+        "resumeParkedStep() (task steps only)"
+      ],
+      "snippet": {
+        "file": "src/state/store.ts",
+        "code": "    if (e.id !== eventId || !e.reviewState) return e;\n    const approved = resolution === \"approved\" || resolution === \"approved_scoped\";\n    return {\n      ...e,\n      reviewState: { ...e.reviewState, status: resolution, reviewer, note, scope, decidedAt: Date.now() },\n      status: approved ? (\"completed\" as const) : resolution === \"constrained\" ? (\"transformed\" as const) : (\"blocked\" as const),\n      evidence: {\n        ...e.evidence,\n        chain: [\n          ...e.evidence.chain,\n          { label: \"Review\", detail: `${resolution.replaceAll(\"_\", \" \")} by ${userById(reviewer)?.name ?? reviewer}${scope ? ` · scope: ${scope}` : \"\"}` },\n          { label: \"Outcome\", detail: approved ? \"Action executed after approval\" : resolution === \"constrained\" ? \"Constrained alternative executed\" : \"Action remained blocked\" },"
+      },
+      "outcome": "The event is completed (approved), transformed (constrained) or blocked (denied); a denial stays denied and an approval never widens later scope.",
+      "evidence": "reviewState {status, reviewer, scope, decidedAt} plus Review/Outcome chain entries; shown in Review Center → Resolved, Evidence → Human review column, and the event's Full evidence drawer.",
+      "scenarioId": "gw-force-main",
+      "realVsSimulated": "Real: decide() clause matching, requester/approver separation, 4h expiry, state mutation and evidence chain. Simulated: the git push itself, GitHub MCP, and the hash chain; no permit id exists in this prototype (that lives in the main app)."
+    },
+    {
+      "id": "uc-constrain-vault",
+      "title": "customers.csv goes to the AI. The emails and phones don't.",
+      "persona": {
+        "name": "Priya Menon",
+        "role": "Admin",
+        "userId": "u-priya"
+      },
+      "why": "Priya attaches customers.csv to the approved enterprise AI and clicks Send to draft renewal emails.",
+      "pages": [
+        "Simulation Lab",
+        "Live Actions",
+        "Token Vault",
+        "Evidence"
+      ],
+      "steps": [
+        {
+          "ui": "Pick \"Customer PII → approved AI\" in Simulation Lab, press Run",
+          "system": "store.simulate(sc) → runScenario(); buildInspection() yields PII.NAME/EMAIL/PHONE via csv-parser-v2"
+        },
+        {
+          "ui": "Watch the pipeline reach Core Brain evaluation",
+          "system": "decide() matches clause cl-ai-2 (External AI usage): CONSTRAIN, transform REVERSIBLE_TOKENIZE, strictest wins"
+        },
+        {
+          "ui": "Read \"What left the device\" in the event detail",
+          "system": "applyTransform() regex-swaps emails/phones for EMAIL_TOKEN_nnn; VaultTokens appended to store.tokens"
+        },
+        {
+          "ui": "Open Token Vault, pick the token, click Restore as inside and outside",
+          "system": "restoreToken() allows only inside && restorable && !expired; every attempt appended to restorations"
+        },
+        {
+          "ui": "Check the decision mix in Live Actions, then the Restore log tab in Token Vault",
+          "system": "metrics() counts the CONSTRAIN event; EventDetail links payloadAfter to Token Vault"
+        }
+      ],
+      "codePath": [
+        "SimLab start()",
+        "store.simulate(sc)",
+        "runScenario(sc, state.contracts, state.lastHash)",
+        "buildInspection(sc)",
+        "decide(req, contracts) → cl-ai-2 CONSTRAIN",
+        "applyTransform(sc, \"REVERSIBLE_TOKENIZE\", [\"PII.EMAIL\",\"PII.PHONE\"], id)",
+        "set({ events, tokens, lastHash })",
+        "restoreToken(tokenId, requester, inside)"
+      ],
+      "snippet": {
+        "file": "src/engine/simulate.ts",
+        "code": "    after = after.replace(re, (m) => {\n      if (kind === \"REVERSIBLE_TOKENIZE\") {\n        const tok = nextToken(cls);\n        steps.push({ kind: \"REVERSIBLE_TOKENIZE\", dataClass: cls, before: m, after: tok, tokenId: tok });\n        tokens.push({\n          id: tok, dataClass: cls, createdAt: Date.now(),\n          scope: \"veridian-internal\",\n          expiresAt: Date.now() + 30 * 24 * 3600 * 1000,\n          restorable: true, eventId,\n        });\n        return tok;\n      }"
+      },
+      "outcome": "The AI receives customers.csv with 6 tokens instead of 3 emails and 3 phones; originals never left the device, and only an inside requester can restore them.",
+      "evidence": "A CONSTRAIN event (status transformed, chain hash, before/after payload) in Live Actions and Evidence; 6 VaultTokens in Token Vault contents; each RestoreRecord (allowed/denied, reason) in the Restore log.",
+      "scenarioId": "net-pii-approved",
+      "realVsSimulated": "Real: clause matching in decide(), regex tokenization, vault entries, restore authorization and log on live store state. Simulated: the Network Extension intercept, detector findings from scenario fixtures (not a real CSV parser), in-memory vault, and inside/outside requester as a button choice rather than an identity check; PII.NAME is detected but not tokenized."
+    },
+    {
+      "id": "uc-task-standing",
+      "title": "A $1,240 refund parks mid-job. Jordan's agent keeps working.",
+      "persona": {
+        "name": "Jordan Lee",
+        "role": "Support Lead",
+        "userId": "u-jordan"
+      },
+      "why": "Ticket #4821 is a double charge; Jordan hands the whole fix to the Support Agent, not step by step.",
+      "pages": [
+        "Tasks",
+        "Review Center",
+        "Standing Permissions",
+        "Evidence"
+      ],
+      "steps": [
+        {
+          "ui": "Tasks → Start a task → Start \"Resolve refund ticket #4821\"",
+          "system": "startTask(\"job-sup-refund\") boxes Support Agent in the Support slip; advanceTask() runs ready steps"
+        },
+        {
+          "ui": "Timeline: step 4 \"Refund $1,240\" shows PARKED; reply and close wait",
+          "system": "advanceTask → runScenario → decide(): blastGovernor $1,240 > $20 → REVIEW, routed to approver Sam"
+        },
+        {
+          "ui": "Sam opens Review Center and clicks Approve once (or Approve scoped)",
+          "system": "resolveReview() appends Review/Outcome to the evidence chain; resumeParkedStep() re-runs advanceTask()"
+        },
+        {
+          "ui": "Standing Permissions: Support Agent on customer-db (≤500 rows) → Revoke",
+          "system": "revokeStanding(\"sp-002\"); impact computed by shadowEvaluate() shows which ALLOWs would become REVIEW"
+        },
+        {
+          "ui": "Click \"Grant again for 7 days\"",
+          "system": "grantStandingAgain() sets status active, expiresAt +7d; decide() step 7b enforces lapsed/deny/maxRows outside tasks"
+        }
+      ],
+      "codePath": [
+        "startTask(\"job-sup-refund\")",
+        "advanceTask(taskId)",
+        "runScenario(sc, contracts, lastHash, { envelope })",
+        "decide() → blastGovernor() / Task Envelope (§7)",
+        "resolveReview(eventId, \"approved\", reviewer)",
+        "resumeParkedStep() → advanceTask()",
+        "revokeStanding(\"sp-002\") / grantStandingAgain(\"sp-002\", \"u-priya\")",
+        "decide() → standing check (§7b)"
+      ],
+      "snippet": {
+        "file": "src/state/store.ts",
+        "code": "    // The task's envelope goes to the brain, so allowed scope, forbidden scope,\n    // time window, file budget and scoped grants are genuinely enforced.\n    const out = runScenario(sc, state.contracts, lastHash, { kernel: state.kernel, envelope: updated });\n    out.event.taskId = taskId;\n    out.event.stepIndex = step.index;\n    out.event.dependsOn = step.dependsOn;\n    tokens = [...tokens, ...out.tokens];\n    if (out.event.decision === \"REVIEW\") {\n      out.event.status = \"parked\";\n      // Route the decision to this job's approver — never the requester.\n      if (out.event.reviewState) out.event.reviewState = { ...out.event.reviewState, approver: t.approver };\n      step.state = \"parked\";\n    } else if (out.event.decision === \"BLOCK\") {\n      step.state = \"blocked\";"
+      },
+      "outcome": "Refund step executes only after Sam's yes, dependents resume automatically, task completes; Support Agent's everyday customer-db authority is off until re-granted, then active for 7 days.",
+      "evidence": "Every step is a hash-chained SimulationEvent (taskId, stepIndex, decidedBy); approval appends Review + Outcome chain entries — visible in Tasks timeline (click step), Review Center, Live Actions, Evidence. Revoke/grant updates s.standing (status, grantedBy, expiresAt) on Standing Permissions only, not as an event.",
+      "scenarioId": "",
+      "realVsSimulated": "Real: envelope scope/forbidden/time/file-budget checks, blast-radius $20 spend limit, park → approve → resume with dependency gating, and standing lapsed/deny/maxRows checks all run through decide(). Simulated: the Stripe refund, SQL lookups, Support SaaS calls and the agent itself never leave the browser; the hash chain is an in-page simpleHash."
+    },
+    {
+      "id": "uc-breakglass",
+      "title": "SEV-1 at 2am. Alex breaks glass for one system, 20 minutes.",
+      "persona": {
+        "name": "Alex Morgan",
+        "role": "Engineering Manager",
+        "userId": "u-alex"
+      },
+      "why": "Checkout is down; the hotfix deploy is parked in REVIEW and no approver is awake.",
+      "pages": [
+        "Break Glass",
+        "Simulation Lab",
+        "Evidence"
+      ],
+      "steps": [
+        {
+          "ui": "Open Break Glass; type reason (min 8 chars), pick AWS Production, set 20 min",
+          "system": "startBreakGlass() records scopeResource r-aws-prod + scopeEnvironment production, clamps 5–60 min, notifies u-maya/u-alex (minus requester)"
+        },
+        {
+          "ui": "Run 'Deploy checkout hotfix to production' in Simulation Lab",
+          "system": "store.simulate() passes activeBreakGlass() scope into runScenario() → decide()"
+        },
+        {
+          "ui": "Watch the parked deploy go through",
+          "system": "decide() step 9: in-scope REVIEW with no Safety Kernel hit becomes ALLOW, decidedBy.layer = \"breakglass\"; simulate.ts stamps event.breakGlass = true"
+        },
+        {
+          "ui": "Run 'DELETE production payment database' while the override is live",
+          "system": "Resource is r-payments-prod, not r-aws-prod → inScope false, override never applies; Safety Kernel 'Destructive production mutation' keeps BLOCK — and would even under a payments-prod override (safety.length > 0)"
+        },
+        {
+          "ui": "Click 'End override now'",
+          "system": "endBreakGlass() sets active:false; history card shows Ended and 'Overrode N actions'"
+        }
+      ],
+      "codePath": [
+        "BreakGlassPage → startBreakGlass()",
+        "store.simulate() → activeBreakGlass()",
+        "runScenario(sc, contracts, lastHash, { breakGlass })",
+        "decide() step 9 → decidedBy.layer = \"breakglass\"",
+        "simulate.ts: event.breakGlass = true",
+        "endBreakGlass()"
+      ],
+      "snippet": {
+        "file": "src/engine/brain.ts",
+        "code": "  const bg = req.breakGlass;\n  if (bg && (decision === \"REVIEW\" || decision === \"BLOCK\")) {\n    const inScope = bg.resource === req.resource && bg.environment === req.environment;\n    if (inScope && safety.length === 0) {\n      reasons.push(\"BREAK-GLASS override: executed under emergency authority for this scope; recorded and time-limited.\");\n      decision = \"ALLOW\";\n      decidedBy = { layer: \"breakglass\", label: \"Break-glass emergency override\" };\n    } else if (inScope) {\n      reasons.push(\"Break-glass is active for this scope, but the Safety Kernel never yields to an override.\");\n    }\n  }"
+      },
+      "outcome": "The hotfix deploy executed under emergency authority; the destructive DELETE of payments-prod stayed BLOCK (out of scope, and kernel-protected regardless); the override is ended and retained forever.",
+      "evidence": "BreakGlassSession in store.breakGlass (History cards; Active overrides / Lifetime activations / Expired-ended metrics); each overridden event stamped breakGlass:true → BREAK-GLASS chip and 'Break-glass' tally on Evidence, and 'Overridden under this session' list on Break Glass.",
+      "scenarioId": "gw-deploy-hotfix",
+      "realVsSimulated": "Real: scope match, kernel precedence, time-box expiry, stamping and hash-chained evidence all run through decide(). Simulated: no sign-in, so the page passes \"u-priya\" as requester (Alex appears as notified); notifications are recorded, not sent; deploys are scenario objects, not AWS calls."
+    },
+    {
+      "id": "uc-kernel",
+      "title": "New kernel rule. Priya installs it without breaking anyone.",
+      "persona": {
+        "name": "Priya Menon",
+        "role": "Admin",
+        "userId": "u-priya"
+      },
+      "why": "Safety Kernel shows \"Update available\" — Wrapbox released v2026.09.2 adding Protected history rewrite.",
+      "pages": [
+        "Safety Kernel",
+        "Simulation Lab",
+        "Live Actions",
+        "Evidence"
+      ],
+      "steps": [
+        {
+          "ui": "Opens Safety Kernel; reads the v2026.09.2 release notes and 'Impact on your history'",
+          "system": "pendingRelease(kernel) finds the release; wouldChange() replays r.test(factsFromEvent(e)) over past non-BLOCK events"
+        },
+        {
+          "ui": "Clicks Install update",
+          "system": "installKernelUpdate() → installRelease() sets sk-history-rewrite to observing, observeUntil = now + OBSERVE_WINDOW_DAYS"
+        },
+        {
+          "ui": "Runs Force push main from Simulation Lab",
+          "system": "simulate(sc) → runScenario() → decide() → kernelHits(): hit lands in safetyObserved; decision stays REVIEW, reason says 'would have blocked this'"
+        },
+        {
+          "ui": "Clicks Start enforcing now on the observing rule card",
+          "system": "enforceKernelRule() → enforceRule() flips mode to enforcing, deletes observeUntil"
+        },
+        {
+          "ui": "Runs the same force push again",
+          "system": "kernelHits() returns an enforced hit; decide() forces BLOCK, decidedBy layer 'safety'"
+        }
+      ],
+      "codePath": [
+        "SafetyKernelPage → installKernelUpdate()",
+        "installRelease(state.kernel, rel, Date.now())",
+        "SimulationLab start() → simulate(sc) → runScenario() → decide()",
+        "kernelHits(kernelFacts(req), req.kernel ?? BASELINE_KERNEL, req.now) → effectiveMode()",
+        "enforceKernelRule(ruleId) → enforceRule()",
+        "event.safetyObserved / event.safetyRules / event.decidedBy.layer === 'safety'"
+      ],
+      "snippet": {
+        "file": "src/engine/brain.ts",
+        "code": "  // 3. Safety Kernel.\n  const { enforced: safety, observed: safetyObserved } = kernelHits(kernelFacts(req), req.kernel ?? BASELINE_KERNEL, req.now ?? Date.now());\n  for (const s of safety) reasons.push(`Safety Kernel: ${s.name} — ${s.description}`);\n  for (const s of safetyObserved) reasons.push(`Safety Kernel (observing, not enforced yet): ${s.name} would have blocked this.`);\n\n  // 4. Combine per precedence: explicit forbid > safety invariant > constrain > review.\n  //    An explicit enterprise BLOCK keeps the credit when both apply.\n  let decision: Decision = contractDecision;\n  if (safety.length > 0 && decision !== \"BLOCK\") {\n    decision = \"BLOCK\";\n    decidedBy = { layer: \"safety\", ruleId: safety[0].ruleId, label: `Safety Kernel — ${safety[0].name}` };\n  }"
+      },
+      "outcome": "Kernel is v2026.09.2 with 7 rules; force-push over main is BLOCKed by the kernel regardless of any company contract. Kernel rules cannot be switched off, and even an active Break Glass does not override a kernel hit — decide() only applies break-glass when safety.length === 0.",
+      "evidence": "Each event stores safetyRules, safetyObserved, decidedBy and a hash-chained evidence record; Safety Kernel shows per-rule Fired / Decided / Would have blocked counts and a 'Where they fired' list, Live Actions and Evidence show the same events, and Coverage Map's 'Always-on safety' tab lists the installed kernel rules.",
+      "scenarioId": "gw-force-main",
+      "realVsSimulated": "Real: install/observe/enforce state machine, effectiveMode auto-enforce after 7 days, replay over history, and decide() precedence are genuine logic; simulated: the Wrapbox update channel is a hard-coded KERNEL_RELEASES list, not a network feed, and the force push is a scenario, not a real git gateway."
+    },
+    {
+      "id": "uc-coverage",
+      "title": "Priya sees which promises Wrapbox can actually keep",
+      "persona": {
+        "name": "Priya Menon",
+        "role": "Admin",
+        "userId": "u-priya"
+      },
+      "why": "Integrations shows a connection \"Understood only\"; she must know which written rules that weakens before claiming compliance.",
+      "pages": [
+        "Integrations",
+        "Coverage Map",
+        "Intent Studio"
+      ],
+      "steps": [
+        {
+          "ui": "Opens Integrations, scans the enforcement strip",
+          "system": "statusOf(connection) takes the worst live skill in c.caps from CAPABILITIES (PENDING skills listed but not counted); MetricBar tallies Enforced / Degraded / Understood only"
+        },
+        {
+          "ui": "Clicks \"Understood only\" — lands on Coverage Map",
+          "system": "nav(\"coverage\"); buildCoverageMatrix(s.contracts, s.kernel) derives rules, safety, gaps, inactive rows and counts live"
+        },
+        {
+          "ui": "Reads \"Your rules\": each clause lists the skills it needs",
+          "system": "ruleRow → clauseCoverage(cl) → coverageOf() takes the worst status across cl.requiredCapabilities"
+        },
+        {
+          "ui": "Opens \"Known gaps\": MCP gateway is Understood only but holds back 0 rules; Semantic classification (Degraded) shows \"2 rules\" — she clicks it",
+          "system": "gaps = CAPABILITIES not ENFORCED, sorted by affected rules+safety; jump(\"rules\", g) filters Your rules to clauses needing that skill"
+        },
+        {
+          "ui": "In Intent Studio tries to activate \"PHI handling (draft)\" — Activate is disabled: Encrypted content cannot be inspected",
+          "system": "contractCoverage(contract) === \"PENDING\" (UNINSPECTABLE → PENDING) disables the button; setContractStatus() also returns false when !canActivate(target)"
+        }
+      ],
+      "codePath": [
+        "IntegrationsPage → statusOf(connection) → CAPABILITIES",
+        "CoverageMap → buildCoverageMatrix(s.contracts, s.kernel)",
+        "ruleRow() → clauseCoverage(cl) → coverageOf(cl.requiredCapabilities)",
+        "capability(id) → CAPABILITIES (src/model/registries.ts)",
+        "store.setContractStatus() → canActivate() → contractCoverage()"
+      ],
+      "snippet": {
+        "file": "src/engine/coverage.ts",
+        "code": "/** Worst status across the skills a promise depends on. A skill that doesn't\n *  exist, or content Wrapbox cannot inspect, means the promise can't be kept → PENDING. */\nexport function coverageOf(requiredCapabilities: string[]): CoverageStatus {\n  let worst: CoverageStatus = \"ENFORCED\";\n  for (const id of requiredCapabilities) {\n    const raw = capability(id)?.status ?? \"PENDING\";\n    const st: CoverageStatus = raw === \"UNINSPECTABLE\" ? \"PENDING\" : raw;\n    if (RANK[st] > RANK[worst]) worst = st;\n  }\n  return worst;\n}"
+      },
+      "outcome": "Every live promise carries the status of its weakest skill; a contract whose skill is PENDING or uninspectable cannot be activated, so coverage is never over-claimed.",
+      "evidence": "No event is written — coverage is recomputed from CAPABILITIES; contractCoverage() is stored on each IntentContract and shows as the Coverage chip in Intent Studio, the posture bar/tabs in Coverage Map, and the Enforced/Degraded/Understood-only strip in Integrations.",
+      "scenarioId": "",
+      "realVsSimulated": "Real: coverageOf/contractCoverage/canActivate ranking, matrix derivation, gap sorting, activation guard and cross-page consistency. Simulated: the skill statuses in CAPABILITIES and every connection/rollout (GitHub, AWS, SQL, MCP) are demo data, not live integrations."
+    },
+    {
+      "id": "uc-evidence",
+      "title": "An auditor asks \"prove it.\" Maya opens the chained ledger.",
+      "persona": {
+        "name": "Maya Chen",
+        "role": "Security Analyst",
+        "userId": "u-maya"
+      },
+      "why": "Audit asks who approved last night's code export and whether the log could have been edited.",
+      "pages": [
+        "Evidence",
+        "Review Center",
+        "Trust Graph"
+      ],
+      "steps": [
+        {
+          "ui": "Open Evidence; read the chain head and counts",
+          "system": "EvidenceExplorer renders store.lastHash and tallies BLOCK/REVIEW/break-glass from s.events"
+        },
+        {
+          "ui": "Filter Decision=REVIEW, Human review=Approved (scoped)",
+          "system": "useCardFilters searches describe(e), dataClasses, matchedContracts clauseText; each card shows hash ← prevHash"
+        },
+        {
+          "ui": "Click the export event; open Causal graph",
+          "system": "EventDetail + EvidenceChain render evidence.chain built in runScenario(); Review/Outcome nodes appended by resolveReview()"
+        },
+        {
+          "ui": "Cross-check the same id under Review Center → Resolved",
+          "system": "Review Center 'Resolved' section (metric 'Decided') lists the same SimulationEvent (e.id, reviewState.reviewer, reviewState.decidedAt)"
+        },
+        {
+          "ui": "Open Trust Graph, click the agent node",
+          "system": "TrustGraph derives user→agent→destination edges from s.events; risky edges/stranger nodes highlighted"
+        }
+      ],
+      "codePath": [
+        "store.simulate(sc)",
+        "runScenario(sc, contracts, state.lastHash)",
+        "decide(req, contracts)",
+        "simpleHash(prevHash + id + result.decision + ts)",
+        "event.evidence = { eventId, hash, prevHash, chain }",
+        "store.lastHash = out.event.evidence.hash",
+        "resolveReview(eventId) → evidence.chain += Review, Outcome",
+        "EvidenceExplorer → EventDetail → EvidenceChain"
+      ],
+      "snippet": {
+        "file": "src/engine/simulate.ts",
+        "code": "    { label: \"Decided by\", detail: result.decidedBy.label },\n    { label: \"Decision\", detail: result.decision },\n    ...(transformation && transformation.length > 0\n      ? [{ label: \"Transform\", detail: `${transformation.length} value(s) ${transformation[0].kind.toLowerCase().replaceAll(\"_\", \" \")}d` }]\n      : []),\n    { label: \"Enforcement\", detail: `${sc.plane} plane` },\n  ];\n\n  const ts = opts?.timestamp ?? Date.now();\n  const hash = simpleHash(prevHash + id + result.decision + ts);"
+      },
+      "outcome": "Maya can show an unbroken hash chain from genesis0 to the chain head, with the reviewer, scope and time on the exact event the Review Center resolved.",
+      "evidence": "Each SimulationEvent carries evidence {eventId, hash, prevHash, chain}; shown on Evidence cards/graph, EventDetail drawer, Review Center 'Resolved', and as edges in Trust Graph.",
+      "scenarioId": "",
+      "realVsSimulated": "Real: chain built per event, hash = FNV-1a over prev+id+decision+ts, store advances lastHash, review resolution appends chain nodes, graph derived from events. Simulated: FNV-1a in-browser stands in for a signed ledger; there is no separate permit id — the Review Center ticket IS the event id."
+    },
+    {
+      "id": "uc-onboarding",
+      "title": "Priya sets up Wrapbox from zero. Every page fills itself in.",
+      "persona": {
+        "name": "Priya Menon",
+        "role": "Admin",
+        "userId": "u-priya"
+      },
+      "why": "A new company has agents already running and no governance; Priya must go live before anyone else joins.",
+      "pages": [
+        "Get started",
+        "Set up Wrapbox (onboarding/admin, 7 steps)",
+        "Intent Studio",
+        "Integrations",
+        "Live Actions",
+        "Evidence",
+        "Control Room"
+      ],
+      "steps": [
+        {
+          "ui": "Opens Get started, starts a fresh workspace",
+          "system": "startFreshWorkspace() loads freshState(); wizard session keys cleared, checklist all unticked"
+        },
+        {
+          "ui": "Enters company, domain, SSO, data region; clicks Create",
+          "system": "makeSigningKey() runs crypto.subtle.generateKey(ECDSA P-256); setOrg() stores keyThumb + createdAt"
+        },
+        {
+          "ui": "Scans repos, ticks agent kinds, publishes recommended contracts",
+          "system": "setOnboarding({categories}); publishRecommendedContracts() activates only contracts canActivate() can keep"
+        },
+        {
+          "ui": "Connects endpoint, network and gateways one by one",
+          "system": "connect() plays vendor phases, then setOnboarding({connected}); rolloutStatus() reads CAPABILITIES registry"
+        },
+        {
+          "ui": "Runs three go-live self-tests, clicks Finish",
+          "system": "simulateById() → runScenario() → decide(); setOnboarding({selfTests}); completeAdminOnboarding(); nav(\"control\")"
+        }
+      ],
+      "codePath": [
+        "start.tsx → startFreshWorkspace()",
+        "Step1Workspace.provision() → makeSigningKey() → crypto.subtle.generateKey({name:\"ECDSA\",namedCurve:\"P-256\"})",
+        "setOrg({company, domain, region, idp, keyThumb, createdAt})",
+        "Step2Discover → setOnboarding({categories})",
+        "Step3Contract → publishRecommendedContracts() → canActivate() / contractCoverage()",
+        "Step4Rollout.connect() → setOnboarding({connected}) ; rolloutStatus() ← CAPABILITIES",
+        "Step7GoLive.run() → simulateById() → simulate() → runScenario() → decide()",
+        "setOnboarding({selfTests}) → completeAdminOnboarding() → nav(\"control\")",
+        "start.tsx checklist(s) derives 8 milestones from org / contracts / onboarding / events"
+      ],
+      "snippet": {
+        "file": "src/pages/onboarding/admin-steps-b.tsx",
+        "code": "  const run = async (sid: string) => {\n    setError(\"\");\n    const e = simulateById(sid); // the real engine, recorded like any other decision\n    if (!e) { setError(`Scenario ${sid} is missing from the scenario library.`); return; }\n    setOnboarding({ selfTests: [...getState().onboarding.selfTests, e.id] });\n    setRuns((r) => ({ ...r, [sid]: { eventId: e.id, stage: 0 } }));\n    for (let i = 1; i <= 4; i++) {\n      await sleep(STAGE_MS);\n      setRuns((r) => ({ ...r, [sid]: { eventId: e.id, stage: i } }));\n    }\n  };"
+      },
+      "outcome": "The workspace has a signed identity, governed agent kinds, active contracts, connected planes, an invited team and its first real decisions; onboarding.adminDone is true.",
+      "evidence": "org.keyThumb, onboarding.{categories,connected,invited,selfTests,adminDone}, contracts and hash-chained events land in the store; they surface as Get started checklist ticks, Intent Studio contracts, Integrations status, Live Actions rows, Evidence entries and Control Room counts.",
+      "scenarioId": "",
+      "realVsSimulated": "Real: the ECDSA P-256 key and SHA-256 thumbprint (WebCrypto), contract activation guard, self-test decisions through decide(), and every checklist/page derived from the one store; simulated: the GitHub repo scan, MDM/gateway rollout phases, SSO directory sync and invite emails."
+    },
+    {
+      "id": "uc-simulator",
+      "title": "Maya tests a rule change on real history before go-live.",
+      "persona": {
+        "name": "Maya Chen",
+        "role": "Security Analyst",
+        "userId": "u-maya"
+      },
+      "why": "A contract change is proposed; Maya must prove what it would allow or weaken before enforcing it.",
+      "pages": [
+        "Policy Simulator",
+        "Simulation Lab",
+        "Intent Studio"
+      ],
+      "steps": [
+        {
+          "ui": "Open Policy Simulator, tab 1, untick a clause or tick a switched-off contract",
+          "system": "PolicySimulator builds `proposed` contracts: active minus removed clause ids, plus added ones"
+        },
+        {
+          "ui": "Open tab 2, choose Your history or Scenario library",
+          "system": "shadowEvaluate(sc, s.contracts) and shadowEvaluate(sc, proposed) run decide() per row; nothing recorded"
+        },
+        {
+          "ui": "Read the before/after mix and the weakened warning",
+          "system": "rows where current !== prop are `changed`; prop === ALLOW flags `weakened`, Safety Kernel still applies"
+        },
+        {
+          "ui": "In Simulation Lab pick the scenario, press Step through",
+          "system": "simulate(sc) calls runScenario() → decide(); pipelineFor() reveals stages; event stored with hash chain"
+        },
+        {
+          "ui": "Tab 3, Open Intent Studio to make it real",
+          "system": "nav(\"intent\"); the simulator itself never writes contracts or events"
+        }
+      ],
+      "codePath": [
+        "PolicySimulator proposed (useMemo over s.contracts, removed, added)",
+        "shadowEvaluate(sc, contracts, kernel?, standing?)",
+        "shadowEvent() — saves getSeq()/getTokenCounter()",
+        "runScenario(sc, contracts, \"shadow\", { kernel, standing })",
+        "decide(req, contracts) → clauseMatches() / kernelHits() / blastGovernor()",
+        "setSeq(seqBefore); setTokenCounter(tokBefore) — no event stored",
+        "SimulationLab start() → simulate(sc) → runScenario(sc, state.contracts, state.lastHash) → set({ events, tokens, lastHash })"
+      ],
+      "snippet": {
+        "file": "src/state/store.ts",
+        "code": "export function shadowEvent(\n  sc: Scenario, contracts: IntentContract[], kernel: KernelState = state.kernel, standing: StandingPermission[] = state.standing,\n): SimulationEvent {\n  const seqBefore = getSeq();\n  const tokBefore = getTokenCounter();\n  const out = runScenario(sc, contracts, \"shadow\", { timestamp: Date.now(), kernel, standing });\n  setSeq(seqBefore);\n  setTokenCounter(tokBefore);\n  return out.event;\n}\n\nexport function shadowEvaluate(sc: Scenario, contracts: IntentContract[], kernel?: KernelState, standing?: StandingPermission[]): Decision {\n  return shadowEvent(sc, contracts, kernel, standing).decision;\n}"
+      },
+      "outcome": "Maya knows exactly which recorded actions flip decision under the proposal, and which protections would be weakened, before any rule changes.",
+      "evidence": "Policy Simulator records nothing (seq and token counter restored, hash \"shadow\"); a Simulation Lab run stores a real event that appears in Control Room, Live Actions, Agents, Token Vault and Evidence.",
+      "scenarioId": "net-unknown-dest",
+      "realVsSimulated": "Real: same decide() and runScenario() as the runtime, real contract diffing, real seq/token restore; simulated: the scenarios themselves (files, endpoints, processes) are a fixed library, and the matcher here is clauseMatches() inside decide(), not a separate checkRule()."
+    }
+  ]
+}
