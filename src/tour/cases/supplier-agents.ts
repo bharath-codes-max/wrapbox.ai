@@ -1,0 +1,95 @@
+import type { TourCase } from "../types";
+
+// Sam, who sponsors a supplier, checks that supplier agents stay inside their
+// contracts: Meridian's agent may only read Stripe; Northwind's contract ended,
+// so its agent holds no authority at all.
+const c: TourCase = {
+  id: "supplier-agents",
+  order: 64,
+  persona: { userId: "u-sam", name: "Sam Rivera", role: "Finance Controller" },
+  title: "Keep supplier agents inside their contracts",
+  goal: "Two suppliers run agents inside Veridian's systems. Sam, who sponsors one of them, wants proof they stay inside what their contracts allow.",
+  outcome: "Meridian's agent did exactly what its contract allows and nothing more, Northwind's agent lost all authority the day its contract ended, and both are named in Agents and Evidence.",
+  start: "control",
+  poster: 2,
+  steps: [
+    {
+      target: { selector: ".rail-item", text: "Agents" },
+      action: "click",
+      title: "Suppliers' agents are listed too",
+      body: "Sam opens Agents. Agents run by suppliers are listed with Veridian's own, each with a Veridian sponsor who answers for it.",
+      say: "Sam opens Agents. Agents run by suppliers are listed right alongside Veridian's own, each with a Veridian sponsor who answers for it.",
+      waitFor: { selector: ".card", text: "Agents detected" },
+    },
+    {
+      target: { selector: "[role=tab]", text: "Suppliers" },
+      action: "click",
+      title: "Each supplier's contract",
+      body: "The Suppliers tab shows every contract: what it covers, whether a data agreement is signed, who sponsors it, and when it ends.",
+      say: "The Suppliers tab shows every contract: what it covers, whether a data agreement is signed, who sponsors it, and when it ends.",
+      waitFor: { selector: ".ecard", text: "Meridian Partners" },
+    },
+    {
+      target: { selector: ".ecard", text: "Meridian Partners" },
+      title: "Read Stripe, nothing else",
+      body: "Meridian Partners reconciles payments. Its agent may read Stripe — and nothing else — until 31 March 2027.",
+      say: "Meridian Partners reconciles payments. Its agent may read Stripe, and nothing else, until the end of March twenty twenty-seven.",
+    },
+    {
+      target: { selector: ".ecard", text: "Northwind BPO" },
+      title: "A contract that has ended",
+      body: "Northwind BPO's contract ended on 1 September 2026. From that day, its agent holds no authority in Veridian's systems.",
+      say: "Northwind B-P-O's contract ended on the first of September, twenty twenty-six. From that day on, its agent holds no authority in Veridian's systems.",
+    },
+    {
+      route: "simlab/agentic",
+      target: { selector: ".stream-item", text: "Supplier agent reads Stripe payouts" },
+      action: "click",
+      title: "Inside the contract",
+      body: "In the Simulation Lab, Meridian's agent reads last week's Stripe payouts.",
+      say: "Now in the Simulation Lab, Meridian's agent reads last week's Stripe payouts.",
+    },
+    {
+      target: { selector: "button", text: "Run", exact: true },
+      action: "click",
+      title: "Allowed",
+      body: "Allowed: reading Stripe is exactly what the contract covers.",
+      say: "Allowed, because reading Stripe is exactly what the contract covers.",
+      waitFor: { selector: ".aterm-line", text: "Decision ALLOW" },
+      hold: 1400,
+    },
+    {
+      target: { selector: ".stream-item", text: "Supplier agent exports customer records" },
+      action: "click",
+      title: "Reaching further",
+      body: "Then the same agent tries to export 2,000 customer rows to its partner portal.",
+      say: "Then the same agent tries to export two thousand customer rows to its partner portal.",
+    },
+    {
+      target: { selector: "button", text: "Run", exact: true },
+      action: "click",
+      title: "Outside the contract: blocked",
+      body: "Blocked by the supplier check: customer-db is outside the contract with Meridian. Break-glass can't widen a supplier's contract either.",
+      say: "Blocked by the supplier check, since the customer database is outside the contract with Meridian. And break-glass can't widen a supplier's contract either.",
+      waitFor: { selector: ".aterm-line", text: "Decision BLOCK" },
+      hold: 1800,
+    },
+    {
+      target: { selector: ".stream-item", text: "Supplier agent after its contract ended" },
+      action: "click",
+      title: "After the contract ended",
+      body: "Northwind's helpdesk agent replies to a support ticket.",
+      say: "Last, Northwind's helpdesk agent replies to a support ticket.",
+    },
+    {
+      target: { selector: "button", text: "Run", exact: true },
+      action: "click",
+      title: "No contract, no authority",
+      body: "Refused: the contract ended on 1 September 2026, so the agent holds no authority. The record names Northwind as the operator.",
+      say: "Refused. The contract ended in September, so the agent holds no authority, and the record names Northwind as the operator.",
+      waitFor: { selector: ".aterm-line", text: "Decision BLOCK" },
+      hold: 2400,
+    },
+  ],
+};
+export default c;

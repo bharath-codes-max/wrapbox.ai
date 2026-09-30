@@ -1,10 +1,7 @@
 node_modules
 dist
-.DS_Store
-.env
-.env.*
-!.env.example
-*.db
+*.log
 
-!packages/policy-core/dist
-*.tsbuildinfo
+# YouTube recording: build artifact + output (too large for git)
+docs/record.html
+docs/video/

@@ -1,32 +1,36 @@
 {
-  "name": "wrapbox-prototype",
+  "name": "wrapbox-real-prototype",
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "description": "Wrapbox Real Prototype — isolated high-fidelity interactive product simulation of the 8-week Wrapbox blueprint. All integrations are simulated; product behavior is real.",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build && node scripts/artifact.mjs",
-    "preview": "vite preview"
+    "dev": "vite --port 5980 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "build:portfolio": "vite build --config vite.portfolio.config.ts && cp docs/portfolio-build/portfolio.html docs/portfolio.html && rm -rf docs/portfolio-build",
+    "preview": "vite preview --port 5980",
+    "test": "tsx --test tests/*.test.ts",
+    "build:v2": "ENTRY=tour vite build --config vite.portfolio.config.ts && cp docs/tour-build/tour.html docs/tour.html && ENTRY=portfolio-v2 vite build --config vite.portfolio.config.ts && cp docs/portfolio-v2-build/portfolio-v2.html docs/portfolio-v2.html && rm -rf docs/tour-build docs/portfolio-v2-build",
+    "build:demo": "ENTRY=tour vite build --config vite.portfolio.config.ts && cp docs/tour-build/tour.html docs/tour.html && ENTRY=portfolio-demo vite build --config vite.portfolio.config.ts && cp docs/portfolio-demo-build/portfolio-demo.html docs/demo.html && rm -rf docs/tour-build docs/portfolio-demo-build",
+    "build:v3": "ENTRY=tour vite build --config vite.portfolio.config.ts && cp docs/tour-build/tour.html docs/tour.html && ENTRY=portfolio-v3 vite build --config vite.portfolio.config.ts && cp docs/portfolio-v3-build/portfolio-v3.html docs/portfolio-v3.html && rm -rf docs/tour-build docs/portfolio-v3-build",
+    "build:record": "ENTRY=tour vite build --config vite.portfolio.config.ts && cp docs/tour-build/tour.html docs/tour.html && ENTRY=portfolio-record vite build --config vite.portfolio.config.ts && cp docs/portfolio-record-build/portfolio-record.html docs/record.html && rm -rf docs/tour-build docs/portfolio-record-build",
+    "record:video": "node docs/_record.mjs"
   },
   "dependencies": {
-    "clsx": "^2.1.1",
-    "js-yaml": "^5.4.1",
-    "lucide-react": "^1.45.0",
-    "motion": "^13.2.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "@wrapbox/registry": "file:packages/registry"
+    "framer-motion": "^11.18.2",
+    "lucide-react": "^1.48.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.3.3",
-    "@types/js-yaml": "^4.0.9",
-    "@types/node": "^22.20.2",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.1",
-    "tailwindcss": "^4.3.3",
-    "typescript": "^7.0.2",
-    "vite": "^8.3.0",
+    "@types/node": "^20.19.43",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "playwright-core": "^1.63.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
     "vite-plugin-singlefile": "^2.3.3"
   }
 }

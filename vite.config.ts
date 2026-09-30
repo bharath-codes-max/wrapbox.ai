@@ -1,22 +1,17 @@
 import { defineConfig } from "vite";
-import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
-import { viteSingleFile } from "vite-plugin-singlefile";
+import { resolve } from "node:path";
 
-const alias = (p: string) => fileURLToPath(new URL(p, import.meta.url));
-
+// Wrapbox Real Prototype — isolated dev server. Port 5980 is intentionally
+// distinct from the main wrapbox-prototype app so both can run side by side.
+// Two entries: the product (index.html) and the portfolio deck (portfolio.html),
+// which imports the same engine so its live slides run the real decision code.
 export default defineConfig({
-  base: "./",
-  plugins: [react(), tailwindcss(), viteSingleFile()],
-  resolve: {
-    alias: {
-      "@wrapbox/sdk": alias("./src/sdk/wrapbox.ts"),
-      "@wrapbox/verify": alias("./src/sdk/verify.ts"),
-      "@wrapbox/openai": alias("./src/sdk/openai.ts"),
-      "@wrapbox/langgraph": alias("./src/sdk/langgraph.ts"),
+  plugins: [react()],
+  server: { port: 5980, strictPort: true },
+  build: {
+    rollupOptions: {
+      input: { main: resolve(__dirname, "index.html"), portfolio: resolve(__dirname, "portfolio.html") },
     },
   },
-  build: { assetsInlineLimit: 100_000_000, chunkSizeWarningLimit: 5000 },
-  server: { port: Number(process.env.PORT) || 5173, strictPort: !!process.env.PORT },
 });

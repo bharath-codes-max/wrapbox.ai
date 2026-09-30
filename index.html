@@ -3,12 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Wrapbox — Runtime Authorization for AI Agents</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='6' y1='6' x2='34' y2='34' gradientUnits='userSpaceOnUse'%3E%3Cstop stop-color='%23a9beff'/%3E%3Cstop offset='1' stop-color='%234f7bff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='40' height='40' rx='9.6' fill='%23111c35'/%3E%3Cg transform='translate%28-2.7 -2.2%29 scale%281.1%29' fill='none' stroke-linecap='round'%3E%3Crect x='9' y='9' width='22' height='22' rx='6' stroke='url%28%23g%29' stroke-width='2.9'/%3E%3Cpath d='M20 4 H30 a6 6 0 0 1 6 6 V20' stroke='%23fff' stroke-width='2.6'/%3E%3Cpath d='M15 20.5 l3.5 3.5 L26 16' stroke='%23fff' stroke-width='3.1' stroke-linejoin='round'/%3E%3C/g%3E%3C/svg%3E" />
-    <meta name="theme-color" content="#111113" />
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE0ElEQVR4nO1WTWhcVRT+zrnvzWTStEMnU9JMo22lIlRdiBWVtljBTY1ZCE1dFFsQdCGCUNx0FeNKcCUi/iFFrJumuijY1qJtsLpxJ/QXAxqh5GfS35lJZua9e47cOy/JmM6QogVd5MDjvp9zv/ud7/zwgBVbsf/YaJlnZ3qXe9v7qSbuyUptfe/SWtG8F1CFQqFbVYmI1K2pVKo8Pj5eSz43s+bert4cVi++mJiYuA5AlmJvPHwgfS2V7qJ4TrWaIeoItXTgw2sLQGha4xifipqxKMYlt87NRV8u6gZg6JnA3efeGthvC51jtq6XrdAV57tuXeHlxM/5AENDXvNbMR0JQWMmCi+FXTRm6rOfJN/5DgJgOU1EWSLKA8gqMJDP39+bRMbALreqPNazTzflsoikG8w5tweMfQlZwRAYw8PS/cErBTC9oNZmAeQRGod5uvlMTh68dBLHx62VitdbJTLGpGGi531kW7cGDjT37ot9Sma73ZJTqN8nIuLud+RyfRsaWINeqTht+6kznUbdRmCClKrlqCbH/YlvD9ulBHhmZmaCoOeImFShrngZNOgjG3y4UQhrs/0cBhl9sNtqNs2w4jCsMSYTBLbfO1280KgZoj1JByh1hASRc7NvfDEJHeL5TuDmwnKeQnqMXKcQWFWgSju7u+8r4J2Rukdl7EEthua7SDfngJoF2FUtoO5AZyMX67mP9m+AoZ1aixu7HKjgmFdzdPFcbiLg8wsbnWikgQJAY2O404Qy4OLJvje4WZl3aDVyh7I8un6+OTxZl4bsQxs3efmJBrizIwMrMQwHUqlVokhP+A27GvK3IjCfhh+J2KknSWR73UbqyvTzqnSHI4bYkmzJRdoZRrDqKj5mYzKpkk+DMvQliIMkoXToimrUy3900DQPIm6eA/NpUMKIH1hESWS6vQ/IaSa1ewE0DFTXr/mayvVvOGA3NxozoBrvXnN+KIfQPK3Vefl97zTkv7D1b7OHlxBw0igkOimNbghAsBxruvrkI4eQNo8vgDKRrM0coVL5K8fU14yDjuw2PvrrIbjqt2K9/LO1ckzBSY+dVH87AgrAFIvFSYKOujT4jox9oR2kWHpgRT1ouVrmDv25irmfxNqyrxk3PkE9fLV00PWlf06HCqHRyqufTy2VvxUBZ5SkwXeDKz6kDPjPm0xTZSBlLKUDB/LDrWffv3mLcEMFZ122oGphCHxxmikSn0MQXIuMtJK/HQGfBtL4pIiUnSIwrCjVwFeK0MC4GIjUt1Sim3U1498jFYD/uAFMlRQdgZFyrRTF0alW8rcj4NMwPT09pYrRJDJxk4zOTylBjczWb8ez+G7e2xicUpFSgywpKnXw5aKl1R0Kq2crrx+ZbiV/OwILaQBjxIvoRm4qEP79esS3a0Ipc6b85uGiBwXM5ORkUaFniNhNrhhMwucnFbEQibas/uUIWF/qGp+y1laJKKSAmcpRii/PsORXN+fUXy7PrhMIFFIqYL5aCvW3YjV+qtBW/vlI25kjJ+t6Cp8x0S51pOqxsQ/kKrWP9z5X3jY843PeQNDe3t68FfoehFWqahlk4if6zl779pfXoA0s/AOjZPVSY9Cvy/kv9b2H/0+LcK1A73x3F0fT8i4t/f7tj+qKrdj/x/4C1GNk00kS7mcAAAAASUVORK5CYII=" />
+    <title>Wrapbox</title>
+    <script>
+      // The live prototype runs the desktop design system + shell in both themes (the
+      // decks, demo and video load tour.html, which keeps the original shell).
+      document.documentElement.dataset.ds = "desktop";
+      // Light is the default; apply a saved dark choice before first paint.
+      try {
+        // ?theme=light|dark sets the saved choice (used by the portfolio screenshot capture).
+        var q = new URLSearchParams(location.search).get("theme");
+        if (q === "dark") localStorage.setItem("wrapbox-theme", "dark");
+        if (q === "light") localStorage.removeItem("wrapbox-theme");
+        document.documentElement.dataset.theme = localStorage.getItem("wrapbox-theme") === "dark" ? "dark" : "light";
+      } catch (e) {
+        document.documentElement.dataset.theme = "light";
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400..600&family=IBM+Plex+Sans:wght@600;700&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <div id="root"></div>

@@ -1,0 +1,85 @@
+import type { TourCase } from "../types";
+
+// Priya reviews every AI agent in the company, including the one nobody registered,
+// then follows it to the complete (and sealed) records that show its two transfers never left.
+const c: TourCase = {
+  id: "agents-inventory",
+  order: 90,
+  persona: { userId: "u-priya", name: "Priya Menon", role: "Admin" },
+  title: "Know every AI agent",
+  goal: "Priya wants one honest list of every AI agent at work in the company: who owns each one, what it can reach, and any agent nobody registered.",
+  outcome: "Priya has the full list, knows the one unregistered agent holds no permissions and was blocked both times it tried, and has the complete records showing nothing reached the unknown address.",
+  start: "control",
+  poster: 2,
+  steps: [
+    {
+      target: { selector: ".rail-item", text: "Agents" },
+      action: "click",
+      title: "Open the agent list",
+      body: "Priya, the admin, wants every AI agent in one list. Agents combines what Wrapbox observes with Veridian's existing identity and device records: 12 agents, 11 with a named owner or sponsor, 1 'shadow' agent nobody registered.",
+      say: "Priya, Veridian's Wrapbox admin, wants one honest list of every AI agent at work. The Agents page combines what Wrapbox observes with the company's existing identity and device records: twelve agents, eleven with a named owner or sponsor, and one shadow agent nobody registered.",
+      waitFor: { selector: ".card", text: "Agents detected" },
+    },
+    {
+      target: { selector: ".ecard", text: "Claude Code" },
+      title: "Registered agents have an owner",
+      body: "Each card shows who answers for the agent, who used it, its tools and where it can send data. Daniel Kim owns Claude Code, trusted with conditions.",
+      say: "Each card shows who answers for the agent, who used it, its tools, and where it can send data. Daniel Kim owns Claude Code, which is trusted with conditions.",
+    },
+    {
+      target: { selector: ".fselect", text: "Trust" },
+      action: "select",
+      value: "unknown",
+      title: "Find the agent nobody vouches for",
+      body: "Priya filters by trust. Only one agent's trust is unknown: nobody registered it, nobody owns it, and Wrapbox rates it critical risk.",
+      say: "Okay, Priya filters by trust to find the agent nobody vouches for. Only one has unknown trust: nobody registered it, nobody owns it, and Wrapbox rates it critical risk.",
+      waitFor: { selector: ".ecard", text: "Unknown MCP agent" },
+    },
+    {
+      target: { selector: ".ecard", text: "Unknown MCP agent" },
+      action: "click",
+      title: "See what Wrapbox knows about it",
+      body: "Priya opens it. It was seen on Alex Morgan's finance laptop, working through a connector nobody registered, and its only destination is an internet address nobody recognises.",
+      say: "Priya opens it. It was seen on Alex Morgan's finance laptop, working through a connector nobody registered, and its only destination is an internet address nobody recognises.",
+      waitFor: { within: ".drawer", selector: "dl.kv" },
+    },
+    {
+      target: { within: ".drawer", selector: ".card", text: "Why this appears here" },
+      title: "Being seen is not being allowed",
+      body: "Wrapbox found it in network traffic, and that grants it no permissions. 'Fail-safe' means assuming the worst: its destinations count as unknown, so sensitive data can't go there.",
+      say: "Being seen isn't being allowed: finding it in network traffic grants it no permissions. Wrapbox assumes the worst, treating its destinations as unknown, so sensitive data can't go there.",
+    },
+    {
+      target: { within: ".drawer", selector: "div.small", text: "Tried to send" },
+      title: "Two attempts, both blocked",
+      body: "It tried twice to send files to that address: customer account numbers and a private login key. BLOCK means Wrapbox stopped each one before it ran.",
+      say: "And it did try, twice, to send files to that address: customer account numbers and a private login key. Wrapbox stopped each one before it ran.",
+    },
+    {
+      target: { within: ".drawer", selector: "button", text: "Open Evidence" },
+      action: "click",
+      title: "Follow it to the evidence",
+      body: "Priya opens Evidence: one complete record per decision, naming who, which agent, what data, where it was headed, the rule and the outcome. Each is also sealed to the one before, so a later edit would show.",
+      say: "So Priya follows it to Evidence, where every decision has one complete record: who, which agent, what data, where it was headed, the rule and the outcome. Each one's also sealed to the one before, so a later edit would show.",
+      waitFor: { selector: ".overview-card", text: "Complete decision records" },
+    },
+    {
+      target: { selector: ".fselect", text: "Agent" },
+      action: "select",
+      value: "a-unknown-mcp",
+      title: "Just this agent's records",
+      body: "Priya narrows the list to the unknown agent: two records, both blocked. Each names the laptop's user and the agent, the data found inside, and its seal.",
+      say: "Priya narrows it down to the unknown agent: two records, both blocked. Each one names the laptop's user and the agent, the data found inside, and its seal.",
+      waitFor: ".ecard-grid",
+    },
+    {
+      target: { selector: ".ecard", text: "export.json" },
+      action: "click",
+      title: "Proof the data never arrived",
+      body: "Priya opens the customer file's record: Wrapbox found customer IDs and account numbers inside, and the record shows the unknown address never received them.",
+      say: "So the list is complete, and here's the proof. Wrapbox found customer I-Ds and account numbers in the customer file, and its sealed record shows the unknown address never received them.",
+      waitFor: { within: ".drawer", selector: "div.grid", text: "Blocked before transmission" },
+    },
+  ],
+};
+export default c;

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE0ElEQVR4nO1WTWhcVRT+zrnvzWTStEMnU9JMo22lIlRdiBWVtljBTY1ZCE1dFFsQdCGCUNx0FeNKcCUi/iFFrJumuijY1qJtsLpxJ/QXAxqh5GfS35lJZua9e47cOy/JmM6QogVd5MDjvp9zv/ud7/zwgBVbsf/YaJlnZ3qXe9v7qSbuyUptfe/SWtG8F1CFQqFbVYmI1K2pVKo8Pj5eSz43s+bert4cVi++mJiYuA5AlmJvPHwgfS2V7qJ4TrWaIeoItXTgw2sLQGha4xifipqxKMYlt87NRV8u6gZg6JnA3efeGthvC51jtq6XrdAV57tuXeHlxM/5AENDXvNbMR0JQWMmCi+FXTRm6rOfJN/5DgJgOU1EWSLKA8gqMJDP39+bRMbALreqPNazTzflsoikG8w5tweMfQlZwRAYw8PS/cErBTC9oNZmAeQRGod5uvlMTh68dBLHx62VitdbJTLGpGGi531kW7cGDjT37ot9Sma73ZJTqN8nIuLud+RyfRsaWINeqTht+6kznUbdRmCClKrlqCbH/YlvD9ulBHhmZmaCoOeImFShrngZNOgjG3y4UQhrs/0cBhl9sNtqNs2w4jCsMSYTBLbfO1280KgZoj1JByh1hASRc7NvfDEJHeL5TuDmwnKeQnqMXKcQWFWgSju7u+8r4J2Rukdl7EEthua7SDfngJoF2FUtoO5AZyMX67mP9m+AoZ1aixu7HKjgmFdzdPFcbiLg8wsbnWikgQJAY2O404Qy4OLJvje4WZl3aDVyh7I8un6+OTxZl4bsQxs3efmJBrizIwMrMQwHUqlVokhP+A27GvK3IjCfhh+J2KknSWR73UbqyvTzqnSHI4bYkmzJRdoZRrDqKj5mYzKpkk+DMvQliIMkoXToimrUy3900DQPIm6eA/NpUMKIH1hESWS6vQ/IaSa1ewE0DFTXr/mayvVvOGA3NxozoBrvXnN+KIfQPK3Vefl97zTkv7D1b7OHlxBw0igkOimNbghAsBxruvrkI4eQNo8vgDKRrM0coVL5K8fU14yDjuw2PvrrIbjqt2K9/LO1ckzBSY+dVH87AgrAFIvFSYKOujT4jox9oR2kWHpgRT1ouVrmDv25irmfxNqyrxk3PkE9fLV00PWlf06HCqHRyqufTy2VvxUBZ5SkwXeDKz6kDPjPm0xTZSBlLKUDB/LDrWffv3mLcEMFZ122oGphCHxxmikSn0MQXIuMtJK/HQGfBtL4pIiUnSIwrCjVwFeK0MC4GIjUt1Sim3U1498jFYD/uAFMlRQdgZFyrRTF0alW8rcj4NMwPT09pYrRJDJxk4zOTylBjczWb8ez+G7e2xicUpFSgywpKnXw5aKl1R0Kq2crrx+ZbiV/OwILaQBjxIvoRm4qEP79esS3a0Ipc6b85uGiBwXM5ORkUaFniNhNrhhMwucnFbEQibas/uUIWF/qGp+y1laJKKSAmcpRii/PsORXN+fUXy7PrhMIFFIqYL5aCvW3YjV+qtBW/vlI25kjJ+t6Cp8x0S51pOqxsQ/kKrWP9z5X3jY843PeQNDe3t68FfoehFWqahlk4if6zl779pfXoA0s/AOjZPVSY9Cvy/kv9b2H/0+LcK1A73x3F0fT8i4t/f7tj+qKrdj/x/4C1GNk00kS7mcAAAAASUVORK5CYII=" />
+    <title>Wrapbox — 2 a.m., the night checkout broke · live demo</title>
+    <meta name="description" content="Wrapbox, end to end: one continuous live demo of every feature in the real prototype, with narration." />
+    <script>
+      // One slide, light by default; ?theme=dark opens dark; ?shot=N freezes for captures.
+      try {
+        var q = new URLSearchParams(location.search).get("theme");
+        if (new URLSearchParams(location.search).has("shot")) document.documentElement.dataset.shot = "1";
+        document.documentElement.dataset.theme = q === "dark" ? "dark" : "light"; document.documentElement.dataset.deck = "v2"; // white page, dark controls
+      } catch (e) { document.documentElement.dataset.theme = "light"; }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="deck"></div>
+    <script type="module" src="/src/portfolio/main-demo.tsx"></script>
+  </body>
+</html>

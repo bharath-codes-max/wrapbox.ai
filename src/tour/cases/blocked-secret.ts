@@ -1,0 +1,91 @@
+import type { TourCase } from "../types";
+
+// Daniel's coding agent reaches for the secrets file while debugging.
+const c: TourCase = {
+  id: "blocked-secret",
+  order: 85,
+  persona: { userId: "u-daniel", name: "Daniel Kim", role: "Developer" },
+  title: "Stop an agent reading secrets",
+  goal: "Daniel wants to see what happens when a coding agent, Claude Code, reaches for the app's file of passwords and keys while fixing a bug.",
+  outcome: "The command never ran, so the agent never saw the keys; it was told which company rule applied and offered a safer path, and the attempt is on record for the security team.",
+  start: "control",
+  poster: 6,
+  steps: [
+    {
+      target: { selector: ".rail-item", text: "Simulation Lab" },
+      action: "click",
+      title: "Open the Simulation Lab",
+      body: "Daniel wants to see what happens if a coding agent reaches for secrets. Here the laptop is simulated, but Veridian's rules and Wrapbox's decision engine are real.",
+      say: "So, Daniel wants to see what happens when a coding agent reaches for the app's passwords and keys. Here, the laptop is simulated, but Veridian's rules and Wrapbox's decision engine are real.",
+      waitFor: { selector: ".page-head", text: "Simulation Lab" },
+    },
+    {
+      target: { selector: "[role=tab]", text: "Endpoint" },
+      action: "click",
+      title: "Look at the laptop",
+      body: "Endpoint means a person's own computer: the files an AI agent opens and the commands it runs there.",
+      say: "Endpoint just means a person's own computer, the laptop here. It covers the files an AI agent opens and the commands it runs there.",
+      waitFor: { selector: ".card", text: "in the Endpoint plane" },
+    },
+    {
+      target: { selector: ".stream-item", text: "Agent reads .env" },
+      action: "click",
+      title: "Pick the situation",
+      body: "Daniel's coding agent is chasing a settings problem and wants to open .env, a file of passwords and keys the app uses.",
+      say: "Okay, here's the situation. Daniel's coding agent is chasing a settings problem and wants to open the dot env file, where the app keeps its passwords and keys.",
+      waitFor: { selector: ".card", text: "attempts to read .env" },
+    },
+    {
+      target: { selector: "button", text: "Run", exact: true },
+      action: "click",
+      title: "Let the agent try",
+      body: "The agent sends a command to show what's in the file. Wrapbox catches it on Daniel's laptop and holds it before it runs.",
+      say: "We let the agent try. It sends a command to show what's in the file, and Wrapbox catches it on Daniel's laptop and holds it before it runs.",
+      waitFor: { selector: ".aterm-line", text: "cat .env" },
+    },
+    {
+      target: { selector: ".aterm-line", text: "Wrapbox(inspect)" },
+      title: "Wrapbox looks inside first",
+      body: "Before deciding, Wrapbox checks what the file holds, right on the laptop. It finds credentials, things that unlock systems: two API keys and a password.",
+      say: "Before deciding, Wrapbox checks what the file holds, right there on the laptop. It finds things that unlock systems: two A-P-I keys and a password.",
+      pad: 5,
+    },
+    {
+      target: { selector: ".rule-item", text: "Agents must not read local secrets files" },
+      title: "Veridian's own rule decides",
+      body: "The Core Brain, Wrapbox's decision engine, finds one matching rule, written by Veridian in its Engineering guardrails: agents must not read local secrets files.",
+      say: "Then Wrapbox's decision engine, the Core Brain, finds one matching rule that Veridian wrote in its Engineering guardrails: agents must not read local secrets files.",
+      pad: 5,
+    },
+    {
+      target: { selector: ".aterm-line", text: "Decision" },
+      title: "Blocked before it ran",
+      body: "BLOCK means the command never ran, so the agent never saw the keys. It is told which rule stopped it.",
+      say: "And it's blocked. The command never ran, so the agent never saw the keys, and it's told which rule stopped it.",
+    },
+    {
+      target: { selector: ".rail-item", text: "Live Actions" },
+      action: "click",
+      title: "Logged for the security team",
+      body: "Live Actions lists every action Wrapbox checked, newest first. The agent's blocked attempt is already at the top.",
+      say: "Now over to Live Actions, which lists every action Wrapbox checked, newest first. The agent's blocked attempt is already at the top, logged for the security team.",
+      waitFor: { selector: ".ecard", text: "secrets file .env" },
+    },
+    {
+      target: { selector: ".ecard", text: "secrets file .env" },
+      action: "click",
+      title: "Open the full record",
+      body: "The newest entry: blocked, high risk. Opening it shows the full record: Daniel, the laptop, Claude Code, and the exact command it tried.",
+      say: "The newest entry says blocked, high risk. Opening it shows the full record: Daniel, the laptop, Claude Code, and the exact command it tried.",
+      waitFor: { within: ".drawer", selector: "dl.kv" },
+    },
+    {
+      target: { within: ".drawer", selector: ".card", text: "Safe alternative" },
+      title: "Stopped, with a way forward",
+      body: "Right under the rule that decided, the record keeps the safer path the agent was offered: carry on without the secret, or ask for a narrow exception.",
+      say: "So the agent's stopped, but not stuck. Right under the rule, the record keeps the safer path it was offered: carry on without the secret, or ask for a narrow exception.",
+      pad: 10,
+    },
+  ],
+};
+export default c;

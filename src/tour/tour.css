@@ -1,0 +1,42 @@
+/* Walkthrough layer — sits above the real app, never intercepts the pointer. */
+.tour-layer { position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; }
+.tour-spot {
+  position: fixed; border-radius: 12px;
+  box-shadow: 0 0 0 2px #2f6bff, 0 0 0 7px rgba(47, 107, 255, 0.22), 0 0 0 9999px rgba(14, 16, 22, 0.44);
+  transition: left .45s cubic-bezier(.22,.9,.3,1), top .45s cubic-bezier(.22,.9,.3,1), width .45s cubic-bezier(.22,.9,.3,1), height .45s cubic-bezier(.22,.9,.3,1);
+}
+.tour-dim { position: fixed; inset: 0; background: rgba(14, 16, 22, 0.44); }
+.tour-card {
+  position: fixed; box-sizing: border-box; padding: 20px 22px 21px; border-radius: 14px;
+  background: #ffffff; color: #141413; border: 1px solid rgba(20, 20, 19, 0.08);
+  box-shadow: 0 24px 60px -18px rgba(14, 16, 22, 0.45), 0 2px 6px rgba(14, 16, 22, 0.08);
+  animation: tour-in .35s cubic-bezier(.22,.9,.3,1) both;
+}
+.tour-card.centered { text-align: left; }
+.tour-card-step { font: 600 13px/1 "Inter", system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: #2f6bff; margin-bottom: 10px; }
+.tour-card-title { font: 650 22px/1.3 "Inter", system-ui, sans-serif; letter-spacing: -0.01em; }
+.tour-card-body { margin-top: 8px; font: 400 18px/1.55 "Inter", system-ui, sans-serif; color: #3d3d3a; }
+@keyframes tour-in { from { opacity: 0; transform: translateY(6px); } }
+
+.tour-cursor { position: fixed; left: 0; top: 0; width: 0; height: 0; transition: transform .72s cubic-bezier(.22,.9,.3,1); }
+.tour-cursor svg { position: absolute; left: -3px; top: -2px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); transition: transform .12s; transform-origin: 3px 2px; }
+.tour-cursor.down svg { transform: scale(.86); }
+.tour-ripple { position: absolute; left: -18px; top: -18px; width: 36px; height: 36px; border-radius: 50%; border: 2px solid #2f6bff; animation: tour-ripple .6s ease-out forwards; }
+@keyframes tour-ripple { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+
+.tour-error { position: fixed; left: 12px; bottom: 12px; max-width: 70%; padding: 8px 12px; border-radius: 8px; background: #b42318; color: #fff; font: 500 12px/1.4 ui-monospace, Menlo, monospace; }
+
+/* The rail expands on :hover in the product; the runner can't hover for real, so
+   it marks the rail while pointing at it and these rules mirror the hover state. */
+.rail[data-tour-hover] .rail-inner { width: 238px; box-shadow: 12px 0 32px -18px rgba(20, 20, 19, 0.16); }
+.rail[data-tour-hover] .rail-grp-label { opacity: 1; height: auto; }
+.rail[data-tour-hover] .rail-label { opacity: 1; }
+.rail[data-tour-hover] .rail-item .rail-dot { left: auto; right: 14px; }
+
+/* Still frames (captures, checks): no motion anywhere, so what is captured is the settled UI.
+   (Headless virtual time never advances CSS animations, so they are removed, not shortened.) */
+html[data-tour-still] *, html[data-tour-still] *::before, html[data-tour-still] *::after {
+  transition: none !important; animation: none !important; scroll-behavior: auto !important;
+}
+/* The one element whose resting state is hidden until its entrance animation runs. */
+html[data-tour-still] .pipe-stage { opacity: 1 !important; transform: none !important; }

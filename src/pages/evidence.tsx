@@ -1,305 +1,189 @@
-import { Download, Search } from "lucide-react";
+// Evidence Explorer — searchable, tamper-evident event evidence with the
+// full causal chain and a graph/timeline view.
 import { useMemo, useState } from "react";
-import { AGENTS, agentById, type Decision } from "../data/agents";
-import { personById } from "../data/people";
-import { CodeBlock, json } from "../components/code";
-import { Avatar, Button, Card, DecisionPill, Drawer, EvidenceChain, Logo, PageHeader, Segmented, cn } from "../components/ui";
-import { clock } from "../lib/router";
-import { EMPLOYEE, getState, toast, useStore, useWorkspace, type Evt } from "../lib/store";
+import { useAppState } from "../state/store";
+import { PageHead, SectionHead, MetricBar, DecisionChip, Chip, SimNote, names, EvidenceChain, RiskChip, Avatar, AgentMark, DestMark, usePaged, Pager, EntityCard, CardGrid, FilterBar, useCardFilters, clock } from "../ui/kit";
+import { describe } from "../ui/describe";
+import { EventDetail } from "../ui/event-detail";
+import type { SimulationEvent } from "../model/types";
+import { ORG, userById, AGENTS, USERS, SUPPLIERS } from "../model/org";
+import { planeLabel } from "../model/registries";
+import { toOcsfBatch, toOtlpLogs, OCSF_VERSION } from "../engine/export";
+import { FileClock, LayoutGrid, GitBranch, Download } from "lucide-react";
 
-/** The device a decision came from: the Runtime records its id on every action it observes. */
-function useDeviceOf(e: Evt | null) {
-  const fleet = useStore((s) => s.fleet);
-  const id = e?.act?.ctx?.["device.id"];
-  return typeof id === "string" ? fleet.find((d) => d.id === id) : undefined;
+/** Save decision records as a file — the same records the ledger shows. */
+function download(name: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+const stamp = () => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
 
-export function EvidenceDrawer({ e, onClose }: { e: Evt | null; onClose: () => void }) {
+// The human's answer to a REVIEW, kept separate from Wrapbox's own decision.
+const REVIEW_OUTCOME: Record<string, [string, string]> = {
+  pending: ["review", "Waiting"],
+  approved: ["allow", "Approved"],
+  approved_scoped: ["allow", "Approved (scoped)"],
+  constrained: ["constrain", "Constrained"],
+  denied: ["block", "Denied"],
+  expired: ["neutral", "Expired"],
+};
+
+function HumanReview({ e }: { e: SimulationEvent }) {
+  const r = e.reviewState;
+  if (!r) return <span className="faint">—</span>;
+  const [tone, label] = REVIEW_OUTCOME[r.status] ?? ["neutral", r.status];
   return (
-    <Drawer open={!!e} onClose={onClose} title={e ? <span className="flex items-center gap-2"><DecisionPill d={e.decision} size="sm" /> Decision {e.id}</span> : ""}>
-      {e && <EvidenceBody e={e} />}
-    </Drawer>
+    <>
+      <Chip tone={tone}>{label}</Chip>
+      {r.reviewer && <span className="small faint">by {userById(r.reviewer)?.name ?? r.reviewer}</span>}
+    </>
   );
 }
 
-function EvidenceBody({ e }: { e: Evt }) {
-  const a = agentById(e.agentId);
-  const p = personById(e.human);
-  const device = useDeviceOf(e);
-  const approvers = (e.approvers ?? []).map((id) => personById(id)).filter(Boolean);
-  // A receipt-derived (live) event carries the enforcement point and the raw
-  // effect the runtime recorded. tamper/violation both collapse to a BLOCK
-  // decision but are NOT policy denials, so the Outcome/Permit rows describe the
-  // real effect rather than "Effect never executed". Both fall back to the
-  // decision-based text when the field is absent (simulated workspaces).
-  const enforcement = typeof e.act?.ctx?.enforcement === "string" ? (e.act.ctx.enforcement as string) : "";
-  const receiptEffect = typeof e.act?.ctx?.receiptEffect === "string" ? (e.act.ctx.receiptEffect as string) : undefined;
-  const live = e.source === "live";
-  const chain: { label: string; value: React.ReactNode; tone?: string }[] = [
-    // Receipts carry no human identity, so the Human link only appears when a
-    // person is actually attributed (simulated workspaces) — never as a blank row
-    // implying an identity the record does not hold.
-    ...(p || e.human
-      ? [{ label: "Human", value: p ? <span className="flex items-center gap-2"><Avatar p={p} size={20} />{p.name} <span className="text-fg-3">· {p.role}</span></span> : e.human }]
-      : []),
-    { label: "Agent", value: <span className="flex items-center gap-2"><Logo name={a.logo} bleed={a.bleed} size={20} rounded="rounded" />{a.name}</span> },
-    ...(device
-      ? [{ label: "Device", value: <span className="flex items-center gap-2"><Logo name={device.osLogo} size={20} rounded="rounded" /><span className="font-mono text-[12px]">{device.hostname}</span> <span className="text-fg-3">· {device.os}</span></span> }]
-      : []),
-    { label: "Action", value: <span className="font-mono text-[12px]">{e.action}</span> },
-    { label: "Effect", value: <span className="font-mono text-[12px]">{e.effect}</span> },
-    { label: "Policy", value: <span className="font-mono text-[12px]">rule {e.rule} · {e.reason}</span> },
-    ...(e.rewritten ? [{ label: "Rewritten", value: <span className="font-mono text-[12px] text-constrain">{e.rewritten}</span> }] : []),
-    ...(e.decision === "REVIEW" || approvers.length
-      ? [{ label: "Approver", value: approvers.length ? approvers.map((x) => x!.name).join(" + ") : <span className="text-review">waiting for a human</span> }]
-      : []),
-    // A live receipt carries no environment (the runtime never records one), so
-    // show the real enforcement point instead of an invented "production".
-    { label: "Decision", value: <span className="flex items-center gap-2"><DecisionPill d={e.decision} size="sm" /><span className="font-mono text-[12px] text-fg-3">{e.latency > 0 ? `${e.latency} ms · ` : ""}{live ? `${enforcement ? `enforced by ${enforcement}` : "enforcement not reported"} · environment not reported` : e.env}</span>{e.observed && <span className="text-[11.5px] text-review">observe mode: would {e.observed}</span>}</span> },
-    // Only describe a permit that exists. An allow with no permit means none was
-    // minted — saying "auto-minted, 60s" would invent a control that never ran.
-    // tamper/violation are not policy decisions, so no permit is minted for them.
-    { label: "Permit", value:
-      receiptEffect === "tamper" ? <span className="text-fg-3">none — this is a tamper record, not a policy decision</span>
-      : receiptEffect === "violation" ? <span className="text-fg-3">none — no permit is minted for a sandbox denial</span>
-      : e.permit ? <span className="font-mono text-[12px] text-accent">{e.permit} · verified · used once</span>
-      : <span className="text-fg-3">{e.decision === "BLOCK" ? "none — denied before execution" : e.decision === "REVIEW" ? "pending approval" : "none minted for this decision"}</span> },
-    // Wrapbox observes its own decision, not the outcome of the action it let
-    // through: "Executed once" would assert a completion nothing reported. A
-    // tamper receipt did NOT block anything; a kernel violation was denied by the
-    // sandbox after the fact — neither is "Effect never executed".
-    { label: "Outcome", value:
-      receiptEffect === "tamper" ? <span className="text-review font-medium">Enforcement config was modified and restored — this action was not blocked</span>
-      : receiptEffect === "violation" ? <span className="text-block font-medium">Denied by the kernel sandbox — recorded from the system log after the fact</span>
-      : e.decision === "BLOCK" ? <span className="text-block font-medium">{receiptEffect === "block" ? "Refused before the tool ran" : "Effect never executed"}</span>
-      : e.decision === "REVIEW" ? <span className="text-review font-medium">Paused</span>
-      : e.decision === "CONSTRAIN" ? <span className="text-constrain font-medium">Safer variant allowed to proceed</span>
-      : <span className="text-allow font-medium">Allowed to proceed</span> },
-  ];
-  return (
-    <div className="p-5 space-y-5">
-      <div>
-        <div className="eyebrow mb-3">Evidence chain</div>
-        <EvidenceChain rows={chain} />
-      </div>
-      <div>
-        {/* "Immutable record" is only earned when the signer's chain fields are
-            present. For a live receipt that carries `prev`, this is a real
-            hash-chained record; otherwise it is a plain decision record. Nothing
-            in a hash/signature position is ever synthesized. */}
-        <div className="eyebrow mb-2">{e.prev ? "Signed receipt — hash-chained on the device" : "Decision record"}</div>
-        <CodeBlock
-          file={`evidence/${e.id}.json`}
-          lang="json"
-          code={json({
-            decision_id: e.id,
-            timestamp: new Date(e.ts).toISOString(),
-            org: getState().domain.replace(/\..*$/, ""),
-            human: e.human,
-            subject_agent: e.agentId,
-            // Which machine the action came from. Part of the signed record, not just the UI.
-            ...(device ? { device: { id: device.id, hostname: device.hostname, os: device.os } } : {}),
-            action: e.action,
-            effect: e.effect,
-            rule: e.rule,
-            decision: e.decision,
-            reason: e.reason,
-            latency_ms: e.latency > 0 ? e.latency : null,
-            // The receipt carries no environment; report the real enforcement
-            // point instead of stamping "production" on it.
-            environment: live ? null : e.env,
-            enforced_by: enforcement || null,
-            observe_mode_would: e.observed ?? null,
-            permit_id: e.permit ?? null,
-            approved_by: e.approvers ?? [],
-            rewritten_to: e.rewritten ?? null,
-            contract_version: getState().version,
-            // Chain fields exactly as the signer returned them — omitted entirely
-            // when this event is not a signed receipt (never fabricated).
-            ...(typeof e.seq === "number" ? { seq: e.seq } : {}),
-            ...(e.prev ? { prev_hash: e.prev } : {}),
-            ...(e.sig ? { signature: e.sig } : {}),
-            ...(e.keyId ? { signing_key_id: e.keyId } : {}),
-            ...(e.verified !== undefined ? { signature_verified: e.verified } : {}),
-          })}
-        />
-      </div>
-    </div>
-  );
-}
+export function EvidenceExplorer({ nav }: { nav: (r: string) => void; route: string }) {
+  const s = useAppState();
+  const [view, setView] = useState<"cards" | "graph">("cards");
+  const [open, setOpen] = useState<SimulationEvent | null>(null);
 
-/**
- * SIEM pushes (Splunk/Datadog) are simulated integrations to systems the user
- * cannot see — the two-step queued/delivered feedback mirrors a real push.
- * The evidence pack is different: it is a local artifact built from decisions
- * already in the store, so we generate the real file and hand it to the user
- * rather than announce a signed PDF this build does not produce or sign.
- */
-function exportTo(target: "splunk" | "datadog" | "pack", rows: Evt[]) {
-  const n = rows.length;
-  if (target === "pack") {
-    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `wrapbox-evidence-${n}-decisions.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    toast("Evidence pack downloaded", `${n} ${n === 1 ? "decision" : "decisions"} · JSON · unsigned`, "allow");
-    return;
-  }
-  const label = target === "splunk" ? "Splunk" : "Datadog";
-  toast(`${label} export started`, `${n} decisions queued · ${target === "splunk" ? "HEC index wrapbox_decisions" : "logs pipeline wrapbox-decisions"}`);
-  setTimeout(() => toast(`Exported to ${label}`, `${n} decisions delivered · 0 failed`, "allow"), 1500);
-}
+  const sorted = useMemo(() => [...s.events].sort((a, b) => b.timestamp - a.timestamp), [s.events]);
+  const f = useCardFilters(sorted, {
+    search: (e) => [e.id, describe(e), e.action, e.actionRaw, e.resource, e.decision, ...e.dataClasses,
+      ...e.matchedContracts.map((m) => m.clauseText), ...e.safetyRules.map((r) => r.name),
+      e.mcp ? `${e.mcp.tool} mcp` : "", e.decidedBy?.label ?? ""].join(" "),
+    filters: [
+      { id: "decision", label: "Decision", get: (e) => e.decision, options: ["ALLOW", "CONSTRAIN", "REVIEW", "BLOCK"].map((v) => ({ value: v, label: v })) },
+      { id: "agent", label: "Agent", get: (e) => e.agent, format: (v) => AGENTS.find((a) => a.id === v)?.name ?? v },
+      { id: "user", label: "Person", get: (e) => e.user, format: (v) => USERS.find((u) => u.id === v)?.name ?? v },
+      { id: "risk", label: "Risk", get: (e) => e.risk, options: ["low", "moderate", "high", "critical"].map((v) => ({ value: v, label: v })) },
+      { id: "plane", label: "Plane", get: (e) => e.plane, format: (v) => planeLabel(v as SimulationEvent["plane"]) },
+      { id: "operator", label: "Operated by", get: (e) => e.operator ?? "veridian", format: (v) => v === "veridian" ? `${ORG.short}'s own agents` : SUPPLIERS.find((x) => x.id === v)?.name ?? v },
+      { id: "review", label: "Human review", get: (e) => e.reviewState?.status ?? "none",
+        options: [...Object.entries(REVIEW_OUTCOME).map(([v, [, label]]) => ({ value: v, label })), { value: "none", label: "No review" }] },
+    ],
+  });
+  const list = f.filtered;
+  const paged = usePaged(list, 8, f.resetKey);
 
-export function Evidence({ query }: { query?: URLSearchParams }) {
-  const role = useStore((s) => s.role);
-  const allRaw = useStore((s) => s.events);
-  const envFilter = useStore((s) => s.envFilter);
-  // v2 is the live Control-Plane-backed workspace: its receipts carry no human,
-  // approver, permit or environment. Copy that is true of simulated workspaces
-  // is scoped away from live data rather than asserted over it.
-  const cpBacked = useStore((s) => s.workspace) === "v2";
-  // A live receipt reports no environment, so it must never be filed under a
-  // specific env bucket — it appears only under "All environments".
-  const all = useMemo(() => (envFilter === "all" ? allRaw : allRaw.filter((e) => e.source !== "live" && e.env === envFilter)), [allRaw, envFilter]);
-  const [d, setD] = useState<"all" | Decision>("all");
-  const [agent, setAgent] = useState(query?.get("agent") || "all");
-  const [q, setQ] = useState("");
-  const [open, setOpen] = useState<Evt | null>(null);
-  const [limit, setLimit] = useState(80);
-  const { labs } = useWorkspace();
-  const mine = role === "employee";
-  const rows = useMemo(
-    () =>
-      all.filter(
-        (e) =>
-          (!mine || e.human === EMPLOYEE.id) &&
-          (d === "all" || e.decision === d) &&
-          (agent === "all" || e.agentId === agent) &&
-          (!q || (e.action + e.rule + e.id).toLowerCase().includes(q.toLowerCase())),
-      ),
-    [all, d, agent, q, mine],
-  );
-  const agentsInLog = useMemo(() => Array.from(new Set(all.map((e) => e.agentId))), [all]);
-  const fleet = useStore((s) => s.fleet);
-  // The column only appears where devices report — workspaces without a Runtime have nothing to show.
-  const showDevice = fleet.length > 0;
+  const tally = useMemo(() => ({
+    total: s.events.length,
+    blocked: s.events.filter((e) => e.decision === "BLOCK").length,
+    reviewed: s.events.filter((e) => e.decision === "REVIEW").length,
+    breakGlass: s.events.filter((e) => e.breakGlass).length,
+  }), [s.events]);
+
   return (
-    <div className="mx-auto max-w-[1240px] px-4 lg:px-8 py-8">
-      <PageHeader
-        eyebrow={mine ? "Your actions only" : "Audit & evidence"}
-        title={mine ? "My activity" : "Evidence"}
-        sub={
-          mine
-            ? "Everything your agents tried, what Wrapbox decided, and why. Only you and your admins can see this."
-            : cpBacked
-              ? "Every decision with the chain that produced it: device → agent → tool → resource → policy → outcome — each one a signed, hash-chained receipt from the endpoint. Approver and permit appear on the decisions that had them."
-              : "Every decision with the chain that produced it: human → agent → tool → resource → policy → approver → permit → outcome."
-        }
-        right={
-          !mine && (
-            <>
-              <Button size="sm" onClick={() => exportTo("splunk", all)}>
-                <Logo name="splunk" size={16} rounded="rounded" /> Export to Splunk
-              </Button>
-              <Button size="sm" onClick={() => exportTo("datadog", all)}>
-                <Logo name="datadog" size={16} rounded="rounded" /> Datadog
-              </Button>
-              <Button size="sm" onClick={() => exportTo("pack", all)}>
-                <Download className="size-3.5" /> Evidence pack
-              </Button>
-            </>
-          )
-        }
+    <div className="page page-wide">
+      <PageHead
+        eyebrow="Visibility"
+        title="Evidence Explorer"
+        sub="One complete record per decision: user, agent, tool, action, resource, environment, data, destination, policy, decision reason, approver and outcome — the whole story of the action in one place."
+        right={<SimNote>Hash chain simulated — evidence model real</SimNote>}
       />
-      <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 px-5 py-4 border-b border-line">
-          <Segmented
-            size="sm"
-            value={d}
-            onChange={setD}
-            options={[
-              { value: "all", label: "All" },
-              { value: "ALLOW", label: "Allowed" },
-              { value: "CONSTRAIN", label: "Rewritten" },
-              { value: "REVIEW", label: "Review" },
-              { value: "BLOCK", label: "Blocked" },
-            ]}
-          />
-          <select value={agent} onChange={(e) => setAgent(e.target.value)} className="h-7 rounded-full border border-line bg-surface px-3 text-[12.5px] text-fg-2 outline-none">
-            <option value="all">All agents</option>
-            {[...AGENTS.filter((a) => agentsInLog.includes(a.id)), ...agentsInLog.filter((id) => !AGENTS.some((a) => a.id === id)).map(agentById)].map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-          <span className="text-[12px] text-fg-3 tnum">{rows.length.toLocaleString("en-US")} {rows.length === 1 ? "decision" : "decisions"}</span>
-          <div className="ml-auto flex items-center gap-2 h-7 rounded-full border border-line bg-surface px-3 w-[240px] max-w-full">
-            <Search className="size-3.5 text-fg-3" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search action, rule or id" className="flex-1 bg-transparent outline-none text-[12.5px] placeholder:text-fg-3" />
+
+      {/* Ledger hero — the complete decision record first; tamper-evident chaining is the integrity layer beneath it */}
+      <div className="card overview-card">
+        <div className="spread" style={{ alignItems: "flex-start", gap: 20 }}>
+          <div className="row" style={{ gap: 12, minWidth: 0 }}>
+            <span className="stat-icon" style={{ color: "var(--accent)", background: "var(--accent-soft)", flexShrink: 0 }}><FileClock size={17} /></span>
+            <div style={{ minWidth: 0 }}>
+              <div className="section-title">Complete decision records</div>
+              <div className="section-sub">Every record captures the user, agent, tool, action, resource, environment, data, destination, policy, decision reason, approver and outcome. Integrity: each record is hash-linked to the one before it, so alterations show up on inspection.</div>
+            </div>
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div className="eyebrow">Chain head</div>
+            <div className="mono small" style={{ marginTop: 5, color: "var(--fg-2)" }}>{s.lastHash}</div>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-left">
-            <thead>
-              <tr className="text-[11.5px] text-fg-3 border-b border-line">
-                <th className="font-medium px-4 py-2 w-[80px]">Time</th>
-                <th className="font-medium px-2 py-2 w-[90px]">Decision</th>
-                <th className="font-medium px-3 py-3">Agent · action</th>
-                {showDevice && <th className="font-medium px-3 py-3">Device</th>}
-                <th className="font-medium px-3 py-3">{mine ? "Why" : "Rule"}</th>
-                {!mine && <th className="font-medium px-3 py-3">Human</th>}
-                <th className="font-medium px-4 py-2 text-right">Latency</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, limit).map((e) => {
-                const a = agentById(e.agentId);
-                const p = personById(e.human);
-                return (
-                  <tr key={e.id} onClick={() => setOpen(e)} className="border-b border-line last:border-0 hover:bg-surface-2 cursor-pointer">
-                    <td className="px-5 py-3.5 font-mono text-[11.5px] text-fg-3 tnum">{clock(e.ts)}</td>
-                    <td className="px-3 py-3.5"><DecisionPill d={e.decision} size="sm" /></td>
-                    <td className="px-3 py-3.5">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <Logo name={a.logo} bleed={a.bleed} size={22} rounded="rounded-md" />
-                        <div className="min-w-0">
-                          <div className="text-[12.5px] font-medium truncate">{a.name}</div>
-                          <div className="font-mono text-[11.5px] text-fg-2 truncate max-w-[420px]">{e.action}</div>
-                        </div>
+        <div className="overview-sep" />
+        <MetricBar band items={[
+          { label: "Decision records", value: tally.total, note: "complete & hash-linked" },
+          { label: "Blocked", value: tally.blocked, tone: tally.blocked > 0 ? "bad" : "good", note: "stopped before execution" },
+          { label: "Reviewed", value: tally.reviewed, tone: tally.reviewed > 0 ? "warn" : "good", note: "escalated to a human" },
+          { label: "Break-glass", value: tally.breakGlass, tone: tally.breakGlass > 0 ? "bad" : "good", note: "emergency overrides logged" },
+        ]} />
+      </div>
+
+      <div className="section">
+        <SectionHead
+          title="Evidence ledger"
+          sub={`${list.length} of ${s.events.length} events, newest first`}
+          right={
+            <div className="row" style={{ gap: 10 }}>
+            <div className="row" style={{ gap: 6 }} aria-label="Export the records shown">
+              <button className="btn btn-sm" disabled={list.length === 0} title={`OCSF ${OCSF_VERSION} — File System, Process, HTTP and API Activity classes`} onClick={() => download(`wrapbox-decisions-${stamp()}.ocsf.json`, toOcsfBatch(list))}><Download size={13} /> OCSF</button>
+              <button className="btn btn-sm" disabled={list.length === 0} title="OpenTelemetry OTLP/JSON logs — POST to a collector's /v1/logs" onClick={() => download(`wrapbox-decisions-${stamp()}.otlp.json`, toOtlpLogs(list))}><Download size={13} /> OTLP</button>
+            </div>
+            <div className="row" style={{ gap: 0 }}>
+              <button className={`btn btn-sm ${view === "cards" ? "btn-primary" : ""}`} style={{ borderRadius: "8px 0 0 8px" }} onClick={() => setView("cards")}><LayoutGrid size={13} /> Cards</button>
+              <button className={`btn btn-sm ${view === "graph" ? "btn-primary" : ""}`} style={{ borderRadius: "0 8px 8px 0" }} onClick={() => setView("graph")}><GitBranch size={13} /> Causal graph</button>
+            </div>
+            </div>
+          }
+        />
+
+        <FilterBar {...f.bar} placeholder="Search id, action, resource, data class, policy…" />
+
+        {list.length === 0 ? (
+          <div className="card empty">No evidence matches the current filters.</div>
+        ) : view === "cards" ? (<>
+          <CardGrid>
+            {paged.rows.map((e) => {
+              const n = names(e);
+              return (
+                <EntityCard
+                  key={e.id}
+                  icon={<AgentMark agentId={e.agent} size={26} />}
+                  eyebrow={`${clock(e.timestamp)} · ${e.id}`}
+                  title={<>{e.destination && <span style={{ marginRight: 6, verticalAlign: "-2px" }}><DestMark destId={e.destination} size={14} /></span>}{describe(e)}</>}
+                  status={<>{e.breakGlass && <Chip tone="critical">BREAK-GLASS</Chip>}<DecisionChip d={e.decision} small /></>}
+                  tone={e.decision === "BLOCK" ? "block" : e.decision === "REVIEW" ? "review" : undefined}
+                  onClick={() => setOpen(e)}
+                  fields={[
+                    { label: "Actor", value: <><Avatar userId={e.user} size={16} />{n.user}<span className="faint">via {n.agent}{e.application ? ` (${e.application})` : ""}</span></> },
+                    { label: "Data", value: e.dataClasses.length === 0
+                      ? <span className="faint">—</span>
+                      : <>{e.dataClasses.slice(0, 2).map((c) => <Chip key={c} tone="violet">{c}</Chip>)}{e.dataClasses.length > 2 && <span className="faint small">+{e.dataClasses.length - 2}</span>}</> },
+                    { label: "Human review", value: <HumanReview e={e} /> },
+                    { label: "Risk", value: <RiskChip r={e.risk} /> },
+                    { label: "Seal", value: <span className="mono small faint">{e.evidence.hash} ← {e.evidence.prevHash}</span> },
+                  ]}
+                />
+              );
+            })}
+          </CardGrid>
+          <Pager {...paged} />
+        </>) : (
+          <div className="grid g2">
+            {list.slice(0, 8).map((e) => {
+              const n = names(e);
+              return (
+                <div key={e.id} className="card rowlink" onClick={() => setOpen(e)} style={{ cursor: "pointer" }}>
+                  <div className="spread" style={{ marginBottom: 14, alignItems: "flex-start", gap: 12 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="row" style={{ gap: 7 }}>
+                        <Avatar userId={e.user} size={20} />
+                        <AgentMark agentId={e.agent} size={14} />
+                        <span className="small" style={{ fontWeight: 550 }}>{n.user}</span>
                       </div>
-                    </td>
-                    {showDevice && (
-                      <td className="px-3 py-3.5 font-mono text-[11.5px] text-fg-3">
-                        {(() => {
-                          const id = e.act?.ctx?.["device.id"];
-                          const d = typeof id === "string" ? fleet.find((x) => x.id === id) : undefined;
-                          return d ? <span title={`${d.hostname} · ${d.os}`}>{d.hostname.split(".")[0]}</span> : <span className="text-fg-3/60">—</span>;
-                        })()}
-                      </td>
-                    )}
-                    <td className={cn("px-3 py-3.5 text-[12px]", mine ? "text-fg-2" : "font-mono text-fg-3")}>{mine ? e.reason : e.rule}</td>
-                    {!mine && <td className="px-3 py-3.5">{p && <span className="flex items-center gap-2 text-[12.5px]"><Avatar p={p} size={20} />{p.name}</span>}</td>}
-                    <td className="px-5 py-3.5 text-right font-mono text-[11.5px] text-fg-3 tnum">{e.latency > 0 ? `${e.latency} ms` : "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {!rows.length && <div className="px-4 py-12 text-center text-[13px] text-fg-3">{allRaw.length ? "No decisions match these filters." : labs ? "No decisions yet — they appear here the moment an agent acts. Try the playground." : "No decisions yet — they appear here the moment an agent acts."}</div>}
-          {rows.length > limit && (
-            <button onClick={() => setLimit(limit + 120)} className="w-full border-t border-line px-4 py-3 text-[12.5px] text-fg-2 hover:bg-surface-2">
-              Show {Math.min(120, rows.length - limit)} more · {(rows.length - limit).toLocaleString("en-US")} older
-            </button>
-          )}
-        </div>
-      </Card>
-      <EvidenceDrawer e={open} onClose={() => setOpen(null)} />
+                      <div className="small dim" style={{ marginTop: 7 }}>{describe(e)}</div>
+                      <div className="mono faint" style={{ fontSize: 11, marginTop: 3 }}>{e.id} · {new Date(e.timestamp).toLocaleTimeString()}</div>
+                    </div>
+                    <DecisionChip d={e.decision} small />
+                  </div>
+                  <EvidenceChain e={e} />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {open && <EventDetail e={s.events.find((x) => x.id === open.id) ?? open} onClose={() => setOpen(null)} onNavigate={(r) => { setOpen(null); nav(r); }} />}
     </div>
   );
 }
