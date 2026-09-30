@@ -116,7 +116,10 @@ function Nav() {
             </button>
           ))}
         </nav>
-        <button onClick={() => scrollTo("demo")} className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-full bg-[#111113] px-4 text-[13.5px] font-medium text-white transition-[filter] hover:brightness-125">
+        <a href="https://wrapbox-real-prototype.vercel.app" className="ml-auto hover:text-fg transition-colors text-[14px] text-fg-2">
+          Login
+        </a>
+        <button onClick={() => scrollTo("demo")} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#111113] px-4 text-[13.5px] font-medium text-white transition-[filter] hover:brightness-125">
           Request a Demo
         </button>
       </Container>
