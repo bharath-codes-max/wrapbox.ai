@@ -63,6 +63,10 @@ export default function App() {
   // A public route that forces the live workspace and renders just the demo
   // for embedding in an iframe from the pitch deck.
   const liveEmbed = seg[0] === "live-embed";
+  // "Login" in the landing nav goes here: the actual product prototype, framed
+  // so the address bar stays on this domain. No relation to the account system
+  // below — it's a separate, self-contained app with its own password screen.
+  const appRoute = seg[0] === "app";
 
   const meta = WORKSPACES[workspace];
   const labsRoute = seg[0] === "playground" || seg[0] === "flows";
@@ -70,12 +74,12 @@ export default function App() {
   // Onboarding is kept — in fabric it's the Enrollment wizard, in v1 the existing SetupLayout wizard.
   const v1Route = ["start", "agents", "team"].includes(seg[0] ?? "");
   useEffect(() => {
-    if (!account && !authRoute && !landing && !pitch && !liveEmbed) go("/landing");
+    if (!account && !authRoute && !landing && !pitch && !liveEmbed && !appRoute) go("/landing");
     else if (account && authRoute) go(homePath());
     else if (labsRoute && !meta.labs) go("/");
     else if (v1Route && meta.fabric) go("/");
-    else if (account && workspace === "v2" && !cpConfigComplete(cpCfg) && seg[0] !== "settings" && !authRoute && !landing && !pitch && !liveEmbed) go("/settings");
-  }, [account, authRoute, landing, pitch, liveEmbed, labsRoute, v1Route, meta, workspace, cpCfg, path]);
+    else if (account && workspace === "v2" && !cpConfigComplete(cpCfg) && seg[0] !== "settings" && !authRoute && !landing && !pitch && !liveEmbed && !appRoute) go("/settings");
+  }, [account, authRoute, landing, pitch, liveEmbed, appRoute, labsRoute, v1Route, meta, workspace, cpCfg, path]);
 
   if (pitch)
     return (
@@ -85,6 +89,15 @@ export default function App() {
     );
 
   if (liveEmbed) return <LiveEmbed />;
+
+  if (appRoute)
+    return (
+      <iframe
+        src="https://wrapbox-real-prototype.vercel.app"
+        title="Wrapbox"
+        style={{ position: "fixed", inset: 0, width: "100%", height: "100%", border: 0 }}
+      />
+    );
 
   if (landing || (!account && !authRoute))
     return (
